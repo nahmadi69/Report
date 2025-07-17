@@ -1069,36 +1069,43 @@ function(input, output, session) {
   })
   output$plot_Year_Forcast <- renderPlotly({
     req(data_plot_Year_Forcast(), input$V_Year_2)
-    
     df <- data_plot_Year_Forcast()
     year_col <- sym(input$V_Year_2)
     
-    p <- ggplot(df, aes(x = factor(!!year_col), y = out, fill = type, group = type,
-                        # The 'text' aesthetic is for the plotly hover tooltip
-                        text = paste("Year:", !!year_col, "<br>", type, ":", scales::dollar(out)))) +
-      geom_bar(stat = "identity", position = "dodge") +
-      
-      # --- ADDED THIS LAYER ---
-      # This adds the text labels on top of the bars
-      geom_text(
-        aes(label = scales::dollar(out, accuracy = 1)), # Set the label to the 'out' value, formatted as dollars
-        position = position_dodge(width = 0.9),         # Dodge labels to align with bars
-        vjust = -0.5,                                   # Adjust vertically to sit above the bar
-        size = 3,                                       # Set font size
-        fontface = "bold"                               # Make the text bold for better visibility
-      ) +
-      # ----------------------
+    df_to_plot <- df %>%
+      mutate(x_year = factor(!!year_col))
     
-    scale_y_continuous(labels = scales::dollar_format(), 
-                       # Expand the y-axis slightly to make room for labels on tall bars
-                       expand = expansion(mult = c(0, .1))) +
-      theme_minimal() +
-      labs(x = "Year", y = "Amount", fill = "") +
-      scale_fill_manual(values = c("Total_Net" = '#DB6400', "Forcast" = "#5EAAA8"))
+    num_types <- n_distinct(df_to_plot$type)
+    color_generator <- colorRampPalette(c("#808080", "#DB6400"))
+    professional_palette <- color_generator(num_types)
     
-    ggplotly(p, tooltip = "text")
+    p <- plot_ly(
+      data = df_to_plot,
+      x = ~x_year,
+      y = ~out,
+      color = ~type,
+      colors = professional_palette,
+      type = 'bar',
+      texttemplate = '%{y:$,.0f}',
+      textposition = 'outside',
+      hovertemplate = paste0(
+        '<b>Year: %{x}</b><br>',
+        '%{fullData.name}: %{y:$,.2f}', 
+        '<extra></extra>' 
+      )
+    ) %>%
+      layout(
+        title = "Total Net vs. Forecast by Year",
+        xaxis = list(title = "Year"),
+        yaxis = list(
+          title = "Amount",
+          range = c(0, max(df_to_plot$out, na.rm = TRUE) * 1.15)
+        ),
+        barmode = 'group',
+        legend = list(title = list(text = ''))
+      )
+    p
   })
-  
   
   data_plot_Manufacturer_Forcast <- eventReactive(input$calcButton_2,{
     req(forcast_target_Net()) 
@@ -1114,52 +1121,89 @@ function(input, output, session) {
     return(data_plot_Manufacturer_Forcast)
   })
   output$plot_Manufacturer_Forcast <- renderPlotly({
+    # 1. Ensure required data is available
     req(data_plot_Manufacturer_Forcast())
     
+    # 2. Prepare the data
     df <- data_plot_Manufacturer_Forcast()
     
-    p <- ggplot(df, aes(x = reorder(Manufacturer, -out), y = out, fill = type, group = type,
-                        # This 'text' aesthetic is for the interactive hover tooltip
-                        text = paste("Manufacturer:", Manufacturer, "<br>", type, ":", scales::dollar(out)))) +
-      geom_bar(stat = "identity", position = "dodge") +
-      
-      # --- ADDED THIS LAYER ---
-      # This adds the text labels on top of the bars
-      geom_text(
-        aes(label = scales::dollar(out, accuracy = 1)), # Format the label as a dollar value
-        position = position_dodge(width = 0.9),         # Dodge labels to align with bars
-        vjust = -0.5,                                   # Adjust vertically to sit above the bar
-        size = 3,                                       # Set font size
-        fontface = "bold"                               # Make the label bold
-      ) +
-      # ----------------------
+    # 3. Determine manufacturer order to replicate ggplot's reorder()
+    # We group by manufacturer, sum the 'out' values, and arrange in descending order.
+    manufacturer_order <- df %>%
+      group_by(Manufacturer) %>%
+      summarise(total_out = sum(out, na.rm = TRUE)) %>%
+      arrange(desc(total_out)) %>%
+      pull(Manufacturer)
     
-    scale_y_continuous(labels = scales::dollar_format(),
-                       # Expand the y-axis to make room for labels on tall bars
-                       expand = expansion(mult = c(0, .1))) +
-      theme_minimal() +
-      labs(x = "Manufacturer", y = "Amount", fill = "") +
-      scale_fill_manual(values = c("Total_Net" = '#DB6400', "Forcast" = "#5EAAA8")) +
-      
-      # --- ADDED THIS THEME ADJUSTMENT ---
-      # Rotate x-axis labels to prevent overlap if names are long
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-    # -----------------------------------
+    # 4. Generate a dynamic color palette
+    # This creates a color gradient from gray to a shade of orange.
+    num_types <- n_distinct(df$type)
+    color_generator <- colorRampPalette(c("#808080", "#DB6400"))
+    professional_palette <- color_generator(num_types)
     
-    ggplotly(p, tooltip = "text")
-  })  
-  
-  data_plot_Medicine_Forcast <- eventReactive(input$calcButton_2,{
-    req(forcast_target_Net()) 
+    # 5. Create the plot using plot_ly
+    p <- plot_ly(
+      data = df,
+      x = ~Manufacturer,
+      y = ~out,
+      color = ~type,
+      # Apply the generated color palette
+      colors = professional_palette,
+      type = 'bar',
+      # Format the text labels on top of the bars as currency
+      texttemplate = '%{y:$,.0f}',
+      textposition = 'outside',
+      # Define the custom hover text
+      hovertemplate = paste0(
+        '<b>Manufacturer: %{x}</b><br>',
+        '%{fullData.name}: %{y:$,.2f}', # %{fullData.name} gets the trace name
+        '<extra></extra>' # Hides the secondary hover box
+      )
+    ) %>%
+      layout(
+        title = "Total Net vs. Forecast by Manufacturer",
+        xaxis = list(
+          title = "Manufacturer",
+          # Apply the custom sort order
+          categoryorder = "array",
+          categoryarray = manufacturer_order,
+          tickangle = -45
+        ),
+        yaxis = list(
+          title = "Amount",
+          # Expand y-axis to make room for labels
+          range = c(0, max(df$out, na.rm = TRUE) * 1.15)
+        ),
+        # Set bar mode to 'group' to match ggplot's 'dodge'
+        barmode = 'group',
+        # Hide the legend title
+        legend = list(title = list(text = '')),
+        margin = list(b = 150) # Increase bottom margin for angled labels
+      )
+    
+    # 6. Return the plotly object
+    p
+  })
+
+  data_plot_Medicine_Forcast <- eventReactive(input$calcButton_2, {
+    req(forcast_target_Net())
     
     data_temp <- forcast_target_Net() %>%
-      group_by(Medicine)%>% 
-      summarise(Total_Net = sum(Total_Net, na.rm = TRUE),
-                Forcast = sum(Weighted, na.rm = TRUE)) %>% 
-      gather(type,out, -Medicine)
+      group_by(Medicine) %>%
+      summarise(
+        Total_Net = sum(Total_Net, na.rm = TRUE),
+        Forcast = sum(Weighted, na.rm = TRUE)
+      ) %>%
+      gather(type, out, -Medicine)
     
-    x <- unique(data_temp %>% top_n(30, out) %>% pull(Medicine))
-    data_plot_Medicine_Forcast <- data_temp %>%  filter(Medicine %in% x)
+    top_7_medicines <- data_temp %>%
+      group_by(Medicine) %>%
+      summarise(total_out = sum(out, na.rm = TRUE)) %>%
+      top_n(10, total_out) %>%
+      pull(Medicine)
+    
+    data_plot_Medicine_Forcast <- data_temp %>%
+      filter(Medicine %in% top_7_medicines)
     
     return(data_plot_Medicine_Forcast)
   })
@@ -1168,47 +1212,70 @@ function(input, output, session) {
     
     df <- data_plot_Medicine_Forcast()
     
-    p <- ggplot(df, aes(x = reorder(Medicine, out), y = out, fill = type,
-                        # Text aesthetic for the interactive hover tooltip
-                        text = paste("Medicine:", Medicine, "<br>", type, ":", scales::dollar(out)))) +
-      geom_bar(stat = "identity", position = "dodge") +
-      
-      # --- ADDED THIS LAYER ---
-      # Adds text labels next to the bars
-      geom_text(
-        aes(label = scales::dollar(out, accuracy = 1)), # Format label as a dollar value
-        position = position_dodge(width = 0.9),         # Dodge labels to align with bars
-        hjust = -0.1,                                   # Adjust horizontally to sit just outside the bar
-        size = 3.5,                                     # Set font size
-        fontface = "bold"                               # Make the label bold
-      ) +
-      # ----------------------
+    medicine_order <- df %>%
+      group_by(Medicine) %>%
+      summarise(total_out = sum(out, na.rm = TRUE)) %>%
+      arrange(desc(total_out)) %>%
+      pull(Medicine)
     
-    # The y-axis scale still refers to the 'y' aesthetic ('out' value), even after the flip
-    scale_y_continuous(labels = scales::dollar_format(),
-                       # Expand the axis to make room for labels
-                       expand = expansion(mult = c(0, .1))) +
-      
-      coord_flip() + # Flip the coordinate system to make bars horizontal
-      theme_minimal() +
-      labs(x = "Medicine", y = "Amount", fill = "") +
-      scale_fill_manual(values = c("Total_Net" = '#DB6400', "Forcast" = "#5EAAA8"))
+    num_types <- n_distinct(df$type)
+    color_generator <- colorRampPalette(c("#808080", "#DB6400"))
+    professional_palette <- color_generator(num_types)
     
-    ggplotly(p, tooltip = "text") %>%
-      layout(height = 900)
-  })  
+    p <- plot_ly(
+      data = df,
+      x = ~Medicine,
+      y = ~out,
+      color = ~type,
+      colors = professional_palette,
+      type = 'bar',
+      texttemplate = '%{y:$,.0f}',
+      textposition = 'outside',
+      hovertemplate = paste0(
+        '<b>Medicine: %{x}</b><br>',
+        '%{fullData.name}: %{y:$,.2f}',
+        '<extra></extra>'
+      )
+    ) %>%
+      layout(
+        title = "Top 7: Total Net vs. Forecast by Medicine",
+        xaxis = list(
+          title = "Medicine",
+          categoryorder = "array",
+          categoryarray = medicine_order,
+          tickangle = -45
+        ),
+        yaxis = list(
+          title = "Amount",
+          range = c(0, max(df$out, na.rm = TRUE) * 1.25)
+        ),
+        barmode = 'group',
+        legend = list(title = list(text = '')),
+        margin = list(b = 150) # Keep margin for angled labels
+      )
+    
+    p
+  })
   
-  data_plot_Country_Forcast <- eventReactive(input$calcButton_2,{
-    req(forcast_target_Net()) 
+  data_plot_Country_Forcast <- eventReactive(input$calcButton_2, {
+    req(forcast_target_Net())
     
     data_temp <- forcast_target_Net() %>%
-      group_by(Country)%>% 
-      summarise(Total_Net = sum(Total_Net, na.rm = TRUE),
-                Forcast = sum(Weighted, na.rm = TRUE)) %>% 
-      gather(type,out, -Country)
+      group_by(Country) %>%
+      summarise(
+        Total_Net = sum(Total_Net, na.rm = TRUE),
+        Forcast = sum(Weighted, na.rm = TRUE)
+      ) %>%
+      gather(type, out, -Country)
     
-    x <- unique(data_temp %>% top_n(30, out) %>% pull(Country))
-    data_plot_Country_Forcast <- data_temp %>%  filter(Country %in% x)
+    top_10_countries <- data_temp %>%
+      group_by(Country) %>%
+      summarise(total_out = sum(out, na.rm = TRUE)) %>%
+      top_n(10, total_out) %>%
+      pull(Country)
+    
+    data_plot_Country_Forcast <- data_temp %>%
+      filter(Country %in% top_10_countries)
     
     return(data_plot_Country_Forcast)
   })
@@ -1217,67 +1284,52 @@ function(input, output, session) {
     
     df <- data_plot_Country_Forcast()
     
-    p <- ggplot(df, aes(x = reorder(Country, out), y = out, fill = type,
-                        # Text aesthetic for the interactive hover tooltip
-                        text = paste("Country:", Country, "<br>", type, ":", scales::dollar(out)))) +
-      geom_bar(stat = "identity", position = "dodge") +
-      
-      # --- ADDED THIS LAYER ---
-      # This adds the text labels next to the horizontal bars
-      geom_text(
-        aes(label = scales::dollar(out, accuracy = 1)), # Format the label as a dollar value
-        position = position_dodge(width = 0.9),         # Dodge labels to align with bars
-        hjust = -0.1,                                   # Adjust horizontally to sit just outside the bar's end
-        size = 3.5,                                     # Set font size
-        fontface = "bold"                               # Make the label bold
-      ) +
-      # ----------------------
+    country_order <- df %>%
+      group_by(Country) %>%
+      summarise(total_out = sum(out, na.rm = TRUE)) %>%
+      arrange(desc(total_out)) %>%
+      pull(Country)
     
-    # Adjust the scale for the 'y' aesthetic ('out' value)
-    scale_y_continuous(labels = scales::dollar_format(),
-                       # Expand the axis to make room for labels
-                       expand = expansion(mult = c(0, .1))) +
-      
-      coord_flip() + # Make the bars horizontal
-      theme_minimal() +
-      labs(x = "Country", y = "Amount", fill = "") +
-      scale_fill_manual(values = c("Total_Net" = '#DB6400', "Forcast" = "#5EAAA8"))
+    num_types <- n_distinct(df$type)
+    color_generator <- colorRampPalette(c("#808080", "#DB6400"))
+    professional_palette <- color_generator(num_types)
     
-    ggplotly(p, tooltip = "text") %>%
-      layout(height = 900)
-  })  
-  
-  data_plot_Medicine_Forcast_Net <- eventReactive(input$calcButton_2,{
-    req(forcast_target_Net()) 
+    p <- plot_ly(
+      data = df,
+      x = ~Country,
+      y = ~out,
+      color = ~type,
+      colors = professional_palette,
+      type = 'bar',
+      texttemplate = '%{y:$,.0f}',
+      textposition = 'outside',
+      hovertemplate = paste0(
+        '<b>Country: %{x}</b><br>',
+        '%{fullData.name}: %{y:$,.2f}',
+        '<extra></extra>'
+      )
+    ) %>%
+      layout(
+        title = "Top 10: Total Net vs. Forecast by Country",
+        xaxis = list(
+          title = "Country",
+          categoryorder = "array",
+          categoryarray = country_order,
+          tickangle = -45
+        ),
+        yaxis = list(
+          title = "Amount",
+          range = c(0, max(df$out, na.rm = TRUE) * 1.25)
+        ),
+        barmode = 'group',
+        legend = list(title = list(text = '')),
+        margin = list(b = 150)
+      )
     
-    data_temp <- forcast_target_Net() %>% 
-      group_by(Medicine,Forcast) %>% 
-      summarise(out= sum(Total_Net,na.rm=TRUE), .groups = 'drop') %>% 
-      rename(type=Forcast) %>% ungroup()
-    x <- unique(data_temp %>% top_n(30, out) %>% pull(Medicine))
-    data_plot_Medicine_Forcast_Net <- data_temp %>%  filter(Medicine %in% x)
-    
-    return(data_plot_Medicine_Forcast_Net)
+    p
   })
-  output$plot_Medicine_Forcast_Net <- renderPlotly({
-    req(data_plot_Medicine_Forcast_Net())
-    
-    df <- data_plot_Medicine_Forcast_Net() %>% 
-      mutate(type=factor(type,levels=c("Predicted","Unpredicted")))
-    
-    p <- ggplot(df, aes(x = reorder(Medicine, out), y = out, fill = type,
-                        text = paste("Medicine:", Medicine, "<br>", type, ":", scales::dollar(out)))) +
-      geom_bar(stat = "identity", position = "dodge") +
-      scale_y_continuous(labels = scales::dollar_format())+
-      coord_flip() +
-      theme_minimal() +
-      labs(x = "Medicine", y = "Total Net", fill = "Forecast Type") +
-      scale_fill_manual(values = c("Predicted" = '#DB6400', "Unpredicted" = '#808080'))
-    
-    ggplotly(p, tooltip = "text") %>%
-      layout(height = 900)
-  })
-  
+
+
   
   data_plot_Manufacturer_Forcast_Net <- eventReactive(input$calcButton_2,{
     req(forcast_target_Net()) 
@@ -1296,16 +1348,131 @@ function(input, output, session) {
     
     df <- data_plot_Manufacturer_Forcast_Net()
     
-    p <- ggplot(df, aes(x = reorder(Manufacturer, -out), y = out, fill = type,
-                        text = paste("Manufacturer:", Manufacturer, "<br>", type, ":", scales::dollar(out)))) +
-      geom_bar(stat = "identity", position = "dodge") +
-      scale_y_continuous(labels = scales::dollar_format())+
-      theme_minimal() +
-      labs(x = "Manufacturer", y = "Total Net", fill = "Forecast Type") +
-      scale_fill_manual(values = c("Predicted" = '#DB6400', "Unpredicted" = '#808080'))
+    # Determine the order of manufacturers based on the 'out' value
+    manufacturer_order <- df %>%
+      group_by(Manufacturer) %>%
+      summarise(total_out = sum(out, na.rm = TRUE)) %>%
+      arrange(desc(total_out)) %>%
+      pull(Manufacturer)
     
-    ggplotly(p, tooltip = "text")
+    # Define the specific colors for the fill
+    forecast_colors <- c("Predicted" = '#DB6400', "Unpredicted" = '#808080')
+    
+    p <- plot_ly(
+      data = df,
+      x = ~Manufacturer,
+      y = ~out,
+      color = ~type,
+      colors = forecast_colors,
+      type = 'bar',
+      # Add text labels to the bars
+      texttemplate = '%{y:$,.0f}',
+      textposition = 'outside',
+      hovertemplate = paste0(
+        '<b>Manufacturer: %{x}</b><br>',
+        '%{fullData.name}: %{y:$,.2f}',
+        '<extra></extra>'
+      )
+    ) %>%
+      layout(
+        title = "Net Forecast by Manufacturer",
+        xaxis = list(
+          title = "Manufacturer",
+          categoryorder = "array",
+          categoryarray = manufacturer_order,
+          tickangle = -45
+        ),
+        yaxis = list(
+          title = "Total Net",
+          tickformat = '$,.0f', # Format y-axis labels as dollars
+          # Add range to make space for labels
+          range = c(0, max(df$out, na.rm = TRUE) * 1.15)
+        ),
+        barmode = 'group',
+        legend = list(title = list(text = 'Forecast Type')),
+        margin = list(b = 150) # Add margin for angled labels
+      )
+    
+    p
   })
+  
+  
+  data_plot_Medicine_Forcast_Net <- eventReactive(input$calcButton_2, {
+    req(forcast_target_Net())
+    
+    data_temp <- forcast_target_Net() %>%
+      group_by(Medicine, Forcast) %>%
+      summarise(out = sum(Total_Net, na.rm = TRUE), .groups = 'drop') %>%
+      rename(type = Forcast) %>%
+      ungroup()
+    
+    # Get the top 10 medicines based on the total 'out' value
+    top_10_medicines <- data_temp %>%
+      group_by(Medicine) %>%
+      summarise(total_out = sum(out, na.rm = TRUE)) %>%
+      top_n(10, total_out) %>%
+      pull(Medicine)
+    
+    # Filter the dataset to include only the top 10
+    data_plot_Medicine_Forcast_Net <- data_temp %>%
+      filter(Medicine %in% top_10_medicines)
+    
+    return(data_plot_Medicine_Forcast_Net)
+  })
+  output$plot_Medicine_Forcast_Net <- renderPlotly({
+    req(data_plot_Medicine_Forcast_Net())
+    
+    df <- data_plot_Medicine_Forcast_Net() %>%
+      mutate(type = factor(type, levels = c("Predicted", "Unpredicted")))
+    
+    # Determine the order for the x-axis
+    medicine_order <- df %>%
+      group_by(Medicine) %>%
+      summarise(total_out = sum(out, na.rm = TRUE)) %>%
+      arrange(desc(total_out)) %>%
+      pull(Medicine)
+    
+    # Define the specific colors
+    forecast_colors <- c("Predicted" = '#DB6400', "Unpredicted" = '#808080')
+    
+    p <- plot_ly(
+      data = df,
+      x = ~Medicine,
+      y = ~out,
+      color = ~type,
+      colors = forecast_colors,
+      type = 'bar',
+      # Add text labels on top of the bars
+      texttemplate = '%{y:$,.0f}',
+      textposition = 'outside',
+      hovertemplate = paste0(
+        '<b>Medicine: %{x}</b><br>',
+        '%{fullData.name}: %{y:$,.2f}',
+        '<extra></extra>'
+      )
+    ) %>%
+      layout(
+        title = "Top 10: Net Forecast by Medicine",
+        xaxis = list(
+          title = "Medicine",
+          categoryorder = "array",
+          categoryarray = medicine_order,
+          tickangle = -45
+        ),
+        yaxis = list(
+          title = "Total Net",
+          tickformat = '$,.0f',
+          # Add range to make space for labels
+          range = c(0, max(df$out, na.rm = TRUE) * 1.15)
+        ),
+        barmode = 'group',
+        legend = list(title = list(text = 'Forecast Type')),
+        margin = list(b = 150) # Add margin for angled labels
+      )
+    
+    p
+  })
+  
   
   # Forcast tables ---------------------------------------------------------------
   
