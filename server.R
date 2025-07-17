@@ -463,7 +463,9 @@ function(input, output, session) {
       
       # Add these two lines to display the values on the bars
       texttemplate = '%{y:$,.0f}',
-      textposition = 'outside'
+      textposition = 'outside',
+      textfont = list(color = ~bar_colors) # Add this line to color the text
+      
     ) %>%
       layout(
         title = "Total Net by Country",
@@ -512,7 +514,9 @@ function(input, output, session) {
       
       # Add these two lines to display the values on the bars
       texttemplate = '%{y:$,.0f}',
-      textposition = 'outside'
+      textposition = 'outside',
+      textfont = list(color = ~bar_colors) # Add this line to color the text
+      
     ) %>%
       layout(
         title = "Total Net by Category",
@@ -567,7 +571,9 @@ function(input, output, session) {
       
       # Add these two lines to display the values on the bars
       texttemplate = '%{y:$,.0f}',
-      textposition = 'outside'
+      textposition = 'outside',
+      textfont = list(color = ~bar_colors) # Add this line to color the text
+      
     ) %>%
       layout(
         title = "Total Net by Medicine",
@@ -579,46 +585,75 @@ function(input, output, session) {
     p
   })
   
-  data_heat_Map <- eventReactive(input$calcButton_1,{
-    req(filtered_data_1(),input$V_Year_1) 
+  data_heat_Map <- eventReactive(input$calcButton_1, {
+    req(filtered_data_1(), input$V_Year_1)
     
+    # This part of your code is good, it gets all "Yes" exports
     exported_data <- filtered_data_1() %>%
       filter(New_Export == "Yes") %>%
-      select(Country, Medicine, !!sym(input$V_Year_1),New_Export) %>% 
-      rename("Year"=input$V_Year_1)
+      select(Country, Medicine, !!sym(input$V_Year_1)) %>%
+      rename("Year" = input$V_Year_1)
     
-    min_year <- min(exported_data$Year)
-    max_year <- max(exported_data$Year)
+    # NEW: Summarize the data to create the hover-text
+    # For each country and year, paste together all the medicines
+    timeline_data <- exported_data %>%
+      group_by(Country, Year) %>%
+      summarise(
+        Exported_Medicines = paste(Medicine, collapse = "<br>"), # Use <br> for line breaks in the tooltip
+        .groups = 'drop'
+      )
     
-    all_combinations <- expand.grid(
-      Medicine = unique(exported_data$Medicine),
-      Country = unique(exported_data$Country),
-      Year = seq(min_year, max_year) 
-    )
-    
-    complete_data <- left_join(all_combinations, exported_data, by = c("Medicine", "Country","Year"))
-    complete_data$New_Export[is.na(complete_data$New_Export)] <- "No"
-    
-    return(complete_data)
+    return(timeline_data)
   })
   output$plot_heat_map <- renderPlotly({
     req(data_heat_Map())
     
-    p <- ggplot(data_heat_Map(), aes(x = Medicine, y = Country, fill = New_Export)) +
-      geom_tile(alpha = 0.8) +
-      scale_fill_manual(values = c("Yes" = '#DB6400', "No" = '#808080'), name = "New export") +
-      geom_tile(color = "black", fill = NA) +
-      facet_wrap(~ Year) +
-      labs(title = "Exported Medicine Heatmap",
-           x = "Medicine", y = "Country") +
-      theme_minimal() +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    plot_data <- data_heat_Map()
     
-    ggplotly(p, tooltip = "text") %>%
-      layout(width = 1400,
-             height = 400)
+    p <- plot_ly(
+      data = plot_data,
+      x = ~Year,
+      y = ~Country,
+      type = 'scatter',
+      mode = 'markers',
+      # Define the hover text
+      hovertemplate = paste(
+        '<b>%{y}</b> - %{x}<br>',
+        '------------------<br>',
+        '<b>New Exports:</b><br>',
+        '%{customdata}<extra></extra>' # Display the list of medicines
+      ),
+      customdata = ~Exported_Medicines, # Provide the medicine list to the hovertemplate
+      marker = list(
+        color = '#DB6400', # A nice, vibrant color for the dots
+        size = 15,
+        symbol = 'circle',
+        line = list(
+          color = 'black',
+          width = 1
+        )
+      )
+    ) %>%
+      layout(
+        title = "Timeline of New Medicine Exports by Country",
+        xaxis = list(
+          title = "Year of First Export",
+          dtick = 1, # Ensure every year is shown as a tick
+          gridcolor = '#e9e9e9'
+        ),
+        yaxis = list(
+          title = "",
+          categoryorder = "total ascending", # Countries with more activity appear higher
+          gridcolor = '#e9e9e9'
+        ),
+        plot_bgcolor = '#fdfdfd' # A light background color
+      )
+    
+    p
   })
   
+  
+  # 
   # Forcast data cleaning -----------------------------------------------------------------
   
   d_sales <- reactive({

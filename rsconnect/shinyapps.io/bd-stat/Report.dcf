@@ -1,0 +1,12 @@
+name: Report
+title: Report
+username: bd-stat
+account: bd-stat
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 11393976
+bundleId: 10630418
+url: https://bd-stat.shinyapps.io/Report/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

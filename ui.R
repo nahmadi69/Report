@@ -118,7 +118,7 @@ ui <- page_fluid(
                   ),      
                   accordion_panel("Category Plot", style = "width: 1500px;", plotlyOutput("plot_Manufacturer")),
                   accordion_panel("Medicine Plot", style = "width: 1500px;", plotlyOutput("plot_Medicine")),
-                  accordion_panel("Heat Map", style = "width: 1500px;", plotlyOutput("plot_heat_map")),
+                  accordion_panel("New Exports", style = "width: 1500px;", plotlyOutput("plot_heat_map")),
                   accordion_panel(
                     "Additional data",
                     style = "width: 1500px;",
