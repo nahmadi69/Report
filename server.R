@@ -726,7 +726,6 @@ function(input, output, session) {
   })
   
   
-  
   output$V_Year_ui_2 <- renderUI({
     req(d_forcast())
     selectInput("V_Year_2", "Please select the year variable", choices = colnames(d_forcast()),selected = "Gregorian_year")
@@ -938,7 +937,8 @@ function(input, output, session) {
         Value = round(Value,0),
         Weighted = round(Weighted, 0),
         Total_Net = round(Total_Net, 0),
-        Forcast=if_else(is.na(Forcast),"Unpredicted",Forcast)) 
+        Forcast=if_else(is.na(Forcast),"Unpredicted",Forcast), 
+        Total_Net=if_else(is.na(Total_Net),0,Total_Net)) 
     
     if(input$type_2 != "All types"){
       joined_data=joined_data %>% 
