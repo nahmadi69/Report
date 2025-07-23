@@ -107,7 +107,8 @@ function(input, output, session) {
   
   Country_1 <- reactive({
     req(manufacturer_data_1())
-    unique(manufacturer_data_1()["Country"])
+    manufacturer_data_1=manufacturer_data_1() %>% arrange(Country)
+    unique(manufacturer_data_1["Country"])
   })
   output$Country_ui_1 <- renderUI({
     req(Country_1())
@@ -132,8 +133,8 @@ function(input, output, session) {
   
   
   Medicine_1 <- reactive({
-    req(manufacturer_data_1())
-    unique(manufacturer_data_1()["Medicine"])
+    req(country_data_1())
+    unique(country_data_1()["Medicine"])
   })
   output$Medicine_ui_1 <- renderUI({
     req(Medicine_1())
@@ -141,8 +142,8 @@ function(input, output, session) {
     selectInput("Medicine_1", "Please select the medicines", choices = c("All medicines", Medicine_1()),multiple = TRUE, selected = "All medicines")
   })
   medicine_data_1 <- reactive({
-    req(manufacturer_data_1())
-    d_filtered <- manufacturer_data_1()
+    req(country_data_1())
+    d_filtered <- country_data_1()
     
     if (!("All medicines" %in% input$Medicine_1)) {
       d_filtered <- d_filtered %>% filter(Medicine %in% input$Medicine_1)
@@ -788,7 +789,8 @@ function(input, output, session) {
   
   Country_2 <- reactive({
     req(manufacturer_forcast_2())
-    unique(manufacturer_forcast_2()["Country"])
+    manufacturer_forcast_2=manufacturer_forcast_2() %>% arrange(Country)
+    unique(manufacturer_forcast_2["Country"])
   })
   output$Country_ui_2 <- renderUI({
     req(Country_2())
@@ -823,8 +825,8 @@ function(input, output, session) {
   
   
   Medicine_2 <- reactive({
-    req(manufacturer_forcast_2())
-    unique(manufacturer_forcast_2()["Medicine"])
+    req(country_forcast_2())
+    unique(country_forcast_2()["Medicine"])
   })
   output$Medicine_ui_2 <- renderUI({
     req(Medicine_2())
@@ -832,8 +834,8 @@ function(input, output, session) {
     selectInput("Medicine_2", "Please select the medicines", choices = c("All medicines", Medicine_2()),multiple = TRUE,selected = "All medicines")
   })
   medicine_forcast_2 <- reactive({
-    req(manufacturer_forcast_2())
-    d_filtered <- manufacturer_forcast_2()
+    req(country_forcast_2())
+    d_filtered <- country_forcast_2()
     
     if (!("All medicines" %in% input$Medicine_2)) {
       d_filtered <- d_filtered %>% filter(Medicine %in% input$Medicine_2)
@@ -841,8 +843,8 @@ function(input, output, session) {
     return(data.frame(d_filtered))
   })
   medicine_sales_2 <- reactive({
-    req(manufacturer_sales_2())
-    d_filtered <- manufacturer_sales_2()
+    req(country_sales_2())
+    d_filtered <- country_sales_2()
     
     if (!("All medicines" %in% input$Medicine_2)) {
       d_filtered <- d_filtered %>% filter(Medicine %in% input$Medicine_2)
