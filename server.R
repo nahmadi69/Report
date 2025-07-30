@@ -172,23 +172,37 @@ function(input, output, session) {
   
   
   # Sales tabels -----------------------------------------------------
-  data_table_1=eventReactive(input$calcButton_1,{
-    
-    vars <- syms(c(input$V_Year_1,input$V_Month_1,"Category", "Manufacturer","Country","Consignee",
-                   "Medicine","Dosage","Total_Net",
-                   "Total_Gross","QTY"))
+  data_table_1 <- eventReactive(input$calcButton_1, {
+    vars <- syms(c(input$V_Year_1, input$V_Month_1, "Category", "Manufacturer", "Country", "Consignee",
+                   "Medicine", "Dosage", "Total_Net",
+                   "Total_Gross", "QTY"))
     vars <- vars[!vars %in% as.character(NULL)]
-    data_table <- filtered_data_1() %>% select(!!!vars)
-    data_table <- data_table %>% arrange(desc(Total_Net)) %>% 
-      mutate(across("Total_Net", ~ formatC(.x, format = "f", digits = 0, flag = "", big.mark = ",", small.mark = "")),
-             across("Total_Gross", ~ formatC(.x, format = "f", digits = 0, flag = "", big.mark = ",", small.mark = "")))
+    
+    # IMPORTANT: Only select columns here. Do not format or arrange.
+    filtered_data_1() %>% 
+      select(!!!vars)
   })
-  
   output$data_1 <- renderReactable({
     req(data_table_1())
     data_table <- data_table_1()
+    
     reactable(
       data_table,
+      # Add a 'columns' argument to define formatting
+      columns = list(
+        Total_Net = colDef(
+          # This formats the number with a comma separator
+          format = colFormat(separators = TRUE, digits = 0),
+          # This sets the initial sort order for the table
+          defaultSortOrder = "desc"
+        ),
+        Total_Gross = colDef(
+          # This also formats the number with a comma separator
+          format = colFormat(separators = TRUE, digits = 0)
+        )
+      ),
+      
+      # Your other options remain the same
       pagination = TRUE,
       defaultPageSize = 15,
       pageSizeOptions = c(10, 20, 50),
@@ -1482,44 +1496,43 @@ function(input, output, session) {
     req(forcast_target_Net())
     
     data <- forcast_target_Net() %>%
-      mutate(Remain = if_else(Total_Net > Weighted, 0, Weighted - Total_Net)) %>%
-      arrange(desc(Remain), desc(Weighted), desc(Total_Net)) %>%
-      mutate(across(c(Total_Net, Weighted, Remain, Value), 
-                    ~ dollar(., accuracy = 1)))
-    
+      mutate(Remain = if_else(Total_Net > Weighted, 0, Weighted - Total_Net)) %>% 
+      arrange(Remain)
     
     reactable(
       data,
+      # defaultSort = c("-Remain", "-Weighted", "-Total_Net"), # Has comma if not last
       pagination = TRUE,
       defaultPageSize = 15,
       pageSizeOptions = c(10, 20, 50),
       filterable = TRUE,
       searchable = TRUE,
+      striped = TRUE,
+      highlight = TRUE,
+      bordered = TRUE,
       columns = list(
+        Total_Net = colDef(format = colFormat(separators = TRUE, digits = 0),defaultSortOrder = "desc"),
+        Weighted  = colDef(format = colFormat(separators = TRUE, digits = 0),defaultSortOrder = "desc"),
+        Remain    = colDef(format = colFormat(separators = TRUE, digits = 0),defaultSortOrder = "desc"),
+        Value     = colDef(format = colFormat(separators = TRUE, digits = 0),defaultSortOrder = "desc"),
         Percent_Weighted = colDef(
           name = "Achievement %",
           style = function(value) {
-            # Ensure value is numeric before cutting
             numeric_value <- as.numeric(value)
             if (is.na(numeric_value)) return(list(background = "white"))
-            
-            # Use a diverging color scale
-            normalized <- (numeric_value - 50) / 50 # Normalize around 50%
+            normalized <- (numeric_value - 50) / 50 
             color <- scales::col_numeric("RdYlGn", domain = c(-1, 1))(normalized)
             list(background = color, color = if(numeric_value < 20 || numeric_value > 90) "white" else "black")
           },
           format = colFormat(suffix = "%")
         )
       ),
-      striped = TRUE,
-      highlight = TRUE,
-      bordered = TRUE,
       theme = reactableTheme(
         borderColor = "#dfe2e5",
         stripedColor = "#f6f8fa",
         highlightColor = "#f0f5f9",
         cellPadding = "8px 12px"
-      )
+      ) # No comma needed on the very last argument
     )
   })
   
