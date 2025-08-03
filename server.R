@@ -1092,7 +1092,7 @@ function(input, output, session) {
       mutate(x_year = factor(!!year_col))
     
     num_types <- n_distinct(df_to_plot$type)
-    color_generator <- colorRampPalette(c("#808080", "#DB6400"))
+    color_generator <- colorRampPalette(c("#3A3535", "#FF7315"))
     professional_palette <- color_generator(num_types)
     
     p <- plot_ly(
@@ -1154,7 +1154,7 @@ function(input, output, session) {
     # 4. Generate a dynamic color palette
     # This creates a color gradient from gray to a shade of orange.
     num_types <- n_distinct(df$type)
-    color_generator <- colorRampPalette(c("#808080", "#DB6400"))
+    color_generator <- colorRampPalette(c("#3A3535", "#FF7315"))
     professional_palette <- color_generator(num_types)
     
     # 5. Create the plot using plot_ly
@@ -1235,7 +1235,7 @@ function(input, output, session) {
       pull(Medicine)
     
     num_types <- n_distinct(df$type)
-    color_generator <- colorRampPalette(c("#808080", "#DB6400"))
+    color_generator <- colorRampPalette(c("#3A3535", "#FF7315"))
     professional_palette <- color_generator(num_types)
     
     p <- plot_ly(
@@ -1307,7 +1307,7 @@ function(input, output, session) {
       pull(Country)
     
     num_types <- n_distinct(df$type)
-    color_generator <- colorRampPalette(c("#808080", "#DB6400"))
+    color_generator <- colorRampPalette(c("#3A3535", "#FF7315"))
     professional_palette <- color_generator(num_types)
     
     p <- plot_ly(
@@ -1372,7 +1372,7 @@ function(input, output, session) {
       pull(Manufacturer)
     
     # Define the specific colors for the fill
-    forecast_colors <- c("Predicted" = '#DB6400', "Unpredicted" = '#808080')
+    forecast_colors <- c("Predicted" = '#FF7315', "Unpredicted" = '#3A3535')
     
     p <- plot_ly(
       data = df,
@@ -1449,7 +1449,7 @@ function(input, output, session) {
       pull(Medicine)
     
     # Define the specific colors
-    forecast_colors <- c("Predicted" = '#DB6400', "Unpredicted" = '#808080')
+    forecast_colors <- c("Predicted" = '#FF7315', "Unpredicted" = '#3A3535')
     
     p <- plot_ly(
       data = df,
@@ -1541,7 +1541,9 @@ function(input, output, session) {
       paste("Forecast-", Sys.Date(), ".csv", sep="")
     },
     content = function(file) {
-      write.csv(forcast_target_Net()
+      write.csv(forcast_target_Net()%>%
+                  mutate(Remain = if_else(Total_Net > Weighted, 0, Weighted - Total_Net)) %>% 
+                  arrange(Remain)
                 , file, row.names = FALSE)
     }
   )
