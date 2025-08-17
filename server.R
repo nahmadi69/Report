@@ -228,46 +228,48 @@ function(input, output, session) {
     }
   )
   
-  data_plot_Country1 <- eventReactive(input$calcButton_1,{
-    req(filtered_data_1(),input$V_Year_1) 
-    
-    data_temp <- filtered_data_1() %>% 
-      group_by(!!!sym(input$V_Year_1)) %>% 
-      summarise(Total_Net= round(sum(Total_Net,na.rm=TRUE))
-                # ,
-                # Quantity=round(sum(QTY,na.rm=TRUE))
-      ) 
-    return(data_temp)
-  })
-  output$data_country111 <- renderReactable({
-    req(data_plot_Country1())
-    data_table <- data_plot_Country1()
-    reactable(
-      data_table,
-      pagination = TRUE,
-      defaultPageSize = 15,
-      pageSizeOptions = c(10, 20, 50),
-      filterable = TRUE,
-      searchable = TRUE,
-      striped = TRUE,
-      highlight = TRUE,
-      bordered = TRUE,
-      theme = reactableTheme(
-        borderColor = "#dfe2e5",
-        stripedColor = "#f6f8fa",
-        highlightColor = "#f0f5f9",
-        cellPadding = "8px 12px"
-      )
-    )
-  })
-  output$downloadTable111 <- downloadHandler(
-    filename = function() {
-      paste("table1-", Sys.Date(), ".csv", sep="")
-    },
-    content = function(file) {
-      write.csv(data_plot_Country1(), file, row.names = FALSE)
-    }
-  )
+  {
+  # data_plot_Country1 <- eventReactive(input$calcButton_1,{
+  #   req(filtered_data_1(),input$V_Year_1) 
+  #   
+  #   data_temp <- filtered_data_1() %>% 
+  #     group_by(!!!sym(input$V_Year_1)) %>% 
+  #     summarise(Total_Net= round(sum(Total_Net,na.rm=TRUE))
+  #               # ,
+  #               # Quantity=round(sum(QTY,na.rm=TRUE))
+  #     ) 
+  #   return(data_temp)
+  # })
+  # output$data_country111 <- renderReactable({
+  #   req(data_plot_Country1())
+  #   data_table <- data_plot_Country1()
+  #   reactable(
+  #     data_table,
+  #     pagination = TRUE,
+  #     defaultPageSize = 15,
+  #     pageSizeOptions = c(10, 20, 50),
+  #     filterable = TRUE,
+  #     searchable = TRUE,
+  #     striped = TRUE,
+  #     highlight = TRUE,
+  #     bordered = TRUE,
+  #     theme = reactableTheme(
+  #       borderColor = "#dfe2e5",
+  #       stripedColor = "#f6f8fa",
+  #       highlightColor = "#f0f5f9",
+  #       cellPadding = "8px 12px"
+  #     )
+  #   )
+  # })
+  # output$downloadTable111 <- downloadHandler(
+  #   filename = function() {
+  #     paste("table1-", Sys.Date(), ".csv", sep="")
+  #   },
+  #   content = function(file) {
+  #     write.csv(data_plot_Country1(), file, row.names = FALSE)
+  #   }
+  # )
+  }
   
   data_plot_Country_year <- eventReactive(input$calcButton_1,{
     req(filtered_data_1(),input$V_Year_1) 
@@ -398,7 +400,7 @@ function(input, output, session) {
     
     # 1. Re-introduce the color generation logic
     num_years <- n_distinct(data_to_plot$x_year)
-    color_generator <- colorRampPalette(c("#808080", "#DB6400"))
+    color_generator <- colorRampPalette(c("#272121", "#DB6400"))
     professional_palette <- color_generator(num_years)
     
     p <- plot_ly(
@@ -444,29 +446,54 @@ function(input, output, session) {
       arrange(desc(Total_Net))
     
     top_5_countries <- data_temp %>%
-      slice_head(n = 5)
+      slice_head(n = 9)
     
     other_countries <- data_temp %>%
-      slice_tail(n = -5) %>%
+      slice_tail(n = -9) %>%
       summarise(Country = "Other Country", Total_Net = sum(Total_Net, na.rm = TRUE))
     
     data_plot_Country <- bind_rows(top_5_countries, other_countries)
+    
+    # --- CHANGE START ---
+    # Explicitly set the factor levels to control the bar order in the plot.
+    # This makes "Other Country" the last level because it's the last row.
+    data_plot_Country$Country <- factor(data_plot_Country$Country, levels = data_plot_Country$Country)
+    # --- CHANGE END ---
     
     return(data_plot_Country)
   })
   output$plot_Country <- renderPlotly({
     req(data_plot_Country())
     
-    data_to_plot <- data_plot_Country() %>%
+    # data_to_plot already has Country as an ordered factor
+    data_to_plot <- data_plot_Country()
+    
+    # --- MODIFIED COLOR LOGIC START ---
+    
+    # 1. Separate the top 5 countries to assign them the gradient
+    top_5_for_colors <- data_to_plot %>%
+      filter(Country != "Other Country") %>%
       arrange(desc(Total_Net))
     
+    # 2. Generate the full color palette
     num_countries <- nrow(data_to_plot)
+    color_generator <- colorRampPalette(c("#DB6400", "#272121"))
+    full_palette <- color_generator(num_countries)
     
-    color_generator <- colorRampPalette(c("#DB6400", "#808080"))
+    # 3. The first (n-1) colors are for the top 5, and the very last color is for "Other"
+    top_5_colors <- head(full_palette, -1)
+    other_color <- tail(full_palette, 1)
     
-    sorted_palette <- color_generator(num_countries)
+    # 4. Create a map: assign the gradient to the top 5 and the last color to "Other Country"
+    color_map <- c(
+      setNames(top_5_colors, top_5_for_colors$Country),
+      "Other Country" = other_color
+    )
     
-    data_to_plot$bar_colors <- sorted_palette
+    # 5. Apply the colors using the map. The bar order is still preserved.
+    data_to_plot$bar_colors <- color_map[as.character(data_to_plot$Country)]
+    
+    # --- MODIFIED COLOR LOGIC END ---
     
     p <- plot_ly(
       data = data_to_plot,
@@ -475,11 +502,9 @@ function(input, output, session) {
       type = 'bar',
       marker = list(color = ~bar_colors),
       hovertemplate = '<b>%{x}</b><br>Total Net: %{y:$,.0f}<extra></extra>',
-      
-      # Add these two lines to display the values on the bars
       texttemplate = '%{y:$,.0f}',
       textposition = 'outside',
-      textfont = list(color = ~bar_colors) # Add this line to color the text
+      textfont = list(color = ~bar_colors)
       
     ) %>%
       layout(
@@ -489,9 +514,9 @@ function(input, output, session) {
       )
     
     p
-  })  
+  })
   
-  data_plot_Manufacturer <- eventReactive(input$calcButton_1,{
+  data_plot_Category <- eventReactive(input$calcButton_1,{
     req(filtered_data_1()) 
     
     data_temp <- filtered_data_1() %>% 
@@ -501,19 +526,19 @@ function(input, output, session) {
                 # Quantity=sum(QTY,na.rm=TRUE)
                 ) 
     
-    data_plot_Manufacturer <- data_temp
+    data_plot_Category <- data_temp
     
-    return(data_plot_Manufacturer)
+    return(data_plot_Category)
   })
-  output$plot_Manufacturer <- renderPlotly({
-    req(data_plot_Manufacturer())
+  output$plot_Category <- renderPlotly({
+    req(data_plot_Category())
     
-    data_to_plot <- data_plot_Manufacturer() %>%
+    data_to_plot <- data_plot_Category() %>%
       arrange(desc(Total_Net))
     
     num_categories <- nrow(data_to_plot)
     
-    color_generator <- colorRampPalette(c("#DB6400", "#808080"))
+    color_generator <- colorRampPalette(c("#DB6400", "#272121"))
     
     sorted_palette <- color_generator(num_categories)
     
@@ -543,38 +568,65 @@ function(input, output, session) {
     
   })
   
-  data_plot_Medicine <- eventReactive(input$calcButton_1,{
-    req(filtered_data_1()) 
+  data_plot_Medicine <- eventReactive(input$calcButton_1, {
+    req(filtered_data_1())
     
-    data_temp <- filtered_data_1() %>% 
-      group_by(Medicine) %>% 
-      summarise(Total_Net= sum(Total_Net,na.rm=TRUE)
-                # ,
-                # Quantity=sum(QTY,na.rm=TRUE)
-                )
-    x <- unique(data_temp %>%  top_n(7, Total_Net) %>% pull(Medicine))
-    data_plot_Medicine <- data_temp %>%  filter(Medicine %in% x)
+    data_temp <- filtered_data_1() %>%
+      group_by(Medicine) %>%
+      summarise(Total_Net = sum(Total_Net, na.rm = TRUE)) %>%
+      arrange(desc(Total_Net))
+    
+    # --- CHANGE START ---
+    # Take the top 6 medicines
+    top_6_medicines <- data_temp %>%
+      slice_head(n = 9)
+    
+    # Group all other medicines into a single "Other Medicine" category
+    other_medicines <- data_temp %>%
+      slice_tail(n = -9) %>%
+      summarise(Medicine = "Other Products", Total_Net = sum(Total_Net, na.rm = TRUE))
+    
+    # Combine them, with "Other Medicine" at the end
+    data_plot_Medicine <- bind_rows(top_6_medicines, other_medicines)
+    
+    # Set the factor levels to control the bar order in the plot
+    data_plot_Medicine$Medicine <- factor(data_plot_Medicine$Medicine, levels = data_plot_Medicine$Medicine)
+    # --- CHANGE END ---
     
     return(data_plot_Medicine)
   })
   output$plot_Medicine <- renderPlotly({
     req(data_plot_Medicine())
     
-    # Sort the data from largest to smallest to prepare for color mapping
-    data_to_plot <- data_plot_Medicine() %>%
+    # data_to_plot now has Medicine as an ordered factor
+    data_to_plot <- data_plot_Medicine()
+    
+    # --- CUSTOM COLOR LOGIC START ---
+    
+    # 1. Separate the top 6 for gradient coloring
+    top_6_for_colors <- data_to_plot %>%
+      filter(Medicine != "Other Products") %>%
       arrange(desc(Total_Net))
     
-    # Count the number of bars
+    # 2. Generate the full palette (for 7 bars)
     num_medicines <- nrow(data_to_plot)
+    color_generator <- colorRampPalette(c("#DB6400", "#272121"))
+    full_palette <- color_generator(num_medicines)
     
-    # Create the color generator (from orange to gray)
-    color_generator <- colorRampPalette(c("#DB6400", "#808080"))
+    # 3. Split the palette: gradient for top 6, last color for "Other"
+    top_6_colors <- head(full_palette, -1)
+    other_color <- tail(full_palette, 1)
     
-    # Generate the palette based on the number of medicines
-    sorted_palette <- color_generator(num_medicines)
+    # 4. Create a map to assign the specific colors
+    color_map <- c(
+      setNames(top_6_colors, top_6_for_colors$Medicine),
+      "Other Medicine" = other_color
+    )
     
-    # Add the generated colors as a column in the data frame
-    data_to_plot$bar_colors <- sorted_palette
+    # 5. Apply the colors using the map
+    data_to_plot$bar_colors <- color_map[as.character(data_to_plot$Medicine)]
+    
+    # --- CUSTOM COLOR LOGIC END ---
     
     p <- plot_ly(
       data = data_to_plot,
@@ -583,17 +635,13 @@ function(input, output, session) {
       type = 'bar',
       marker = list(color = ~bar_colors),
       hovertemplate = '<b>%{x}</b><br>Total Net: %{y:$,.0f}<extra></extra>',
-      
-      # Add these two lines to display the values on the bars
       texttemplate = '%{y:$,.0f}',
       textposition = 'outside',
-      textfont = list(color = ~bar_colors) # Add this line to color the text
-      
+      textfont = list(color = ~bar_colors)
     ) %>%
       layout(
         title = "Total Net by Medicine",
         yaxis = list(title = "Total Net"),
-        # Ensure the bar chart order matches our sorted data
         xaxis = list(title = "", categoryorder = "array", categoryarray = ~Medicine)
       )
     
@@ -1092,7 +1140,7 @@ function(input, output, session) {
       mutate(x_year = factor(!!year_col))
     
     num_types <- n_distinct(df_to_plot$type)
-    color_generator <- colorRampPalette(c("#3A3535", "#FF7315"))
+    color_generator <- colorRampPalette(c("#272121", "#FF7315"))
     professional_palette <- color_generator(num_types)
     
     p <- plot_ly(
@@ -1154,7 +1202,7 @@ function(input, output, session) {
     # 4. Generate a dynamic color palette
     # This creates a color gradient from gray to a shade of orange.
     num_types <- n_distinct(df$type)
-    color_generator <- colorRampPalette(c("#3A3535", "#FF7315"))
+    color_generator <- colorRampPalette(c("#272121", "#FF7315"))
     professional_palette <- color_generator(num_types)
     
     # 5. Create the plot using plot_ly
@@ -1235,7 +1283,7 @@ function(input, output, session) {
       pull(Medicine)
     
     num_types <- n_distinct(df$type)
-    color_generator <- colorRampPalette(c("#3A3535", "#FF7315"))
+    color_generator <- colorRampPalette(c("#272121", "#FF7315"))
     professional_palette <- color_generator(num_types)
     
     p <- plot_ly(
@@ -1307,7 +1355,7 @@ function(input, output, session) {
       pull(Country)
     
     num_types <- n_distinct(df$type)
-    color_generator <- colorRampPalette(c("#3A3535", "#FF7315"))
+    color_generator <- colorRampPalette(c("#272121", "#FF7315"))
     professional_palette <- color_generator(num_types)
     
     p <- plot_ly(
@@ -1372,7 +1420,7 @@ function(input, output, session) {
       pull(Manufacturer)
     
     # Define the specific colors for the fill
-    forecast_colors <- c("Predicted" = '#FF7315', "Unpredicted" = '#3A3535')
+    forecast_colors <- c("Predicted" = '#FF7315', "Unpredicted" = '#272121')
     
     p <- plot_ly(
       data = df,
@@ -1449,7 +1497,7 @@ function(input, output, session) {
       pull(Medicine)
     
     # Define the specific colors
-    forecast_colors <- c("Predicted" = '#FF7315', "Unpredicted" = '#3A3535')
+    forecast_colors <- c("Predicted" = '#FF7315', "Unpredicted" = '#272121')
     
     p <- plot_ly(
       data = df,

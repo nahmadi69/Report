@@ -110,13 +110,13 @@ ui <- page_fluid(
                   ),
                   accordion_panel("Year and Manufacturer Plot", style = "width: 1500px;", plotlyOutput('plot_year')),
                   accordion_panel("Country Plot", style = "width: 1500px;", plotlyOutput('plot_Country')),
-                  accordion_panel(
-                    "Table Country",
-                    style = "width: 1500px;",
-                    reactableOutput("data_country111"),
-                    downloadButton("downloadTable111", "Download Table", class = "btn-sm btn-secondary mt-2")
-                  ),      
-                  accordion_panel("Category Plot", style = "width: 1500px;", plotlyOutput("plot_Manufacturer")),
+                  # accordion_panel(
+                  #   "Table Country",
+                  #   style = "width: 1500px;",
+                  #   reactableOutput("data_country111"),
+                  #   downloadButton("downloadTable111", "Download Table", class = "btn-sm btn-secondary mt-2")
+                  # ),      
+                  accordion_panel("Category Plot", style = "width: 1500px;", plotlyOutput("plot_Category")),
                   accordion_panel("Medicine Plot", style = "width: 1500px;", plotlyOutput("plot_Medicine")),
                   accordion_panel("New Exports", style = "width: 1500px;", plotlyOutput("plot_heat_map")),
                   accordion_panel(
