@@ -2,16 +2,41 @@ function(input, output, session) {
 
   Country_code=read_xlsx("Country_code.xlsx")
   
+
   
   # Sales data cleaning -----------------------------------------------------
+  MA <- reactive({
+    if (is.null(input$MA)) {
+      return(NULL)  
+    }
+    read_excel(input$MA$datapath,sheet = "MA") %>%
+      mutate(
+        Start = year(Real_registration),
+        Finish = year(Expiry_registration)
+      ) %>%
+      select(Manufacturer, Product, Country, Start, Finish) %>%
+      mutate(Finish = ifelse(is.na(Finish), Start, Finish)) %>%
+      rowwise() %>%
+      mutate(Gregorian_year = list(Start:Finish)) %>%
+      unnest(Gregorian_year) %>%
+      ungroup() %>%
+      select(Manufacturer, Product, Country, Gregorian_year) %>%
+      distinct() %>%
+      mutate(Status = "With MA Approval") %>%
+      rename(Medicine = Product)
+  })
   
   data_1 <- reactive({
     if (is.null(input$file_1)) {
       return(NULL)  
     }
-    read_excel(input$file_1$datapath,sheet = "Export")
+    read_excel(input$file_1$datapath,sheet = "Export") %>% 
+      left_join(MA()) %>% 
+      mutate(Status=if_else(is.na(Status),"Without MA Approval",Status))
   })
  
+  
+  
   Category_1 <- reactive({
     req(data_1())
     unique(data_1()["Category"])
@@ -132,9 +157,36 @@ function(input, output, session) {
   })
   
   
-  Medicine_1 <- reactive({
+  Consignee_1 <- reactive({
     req(country_data_1())
-    unique(country_data_1()["Medicine"])
+    country_data_1=country_data_1() %>% arrange(Consignee)
+    unique(country_data_1["Consignee"])
+  })
+  output$Consignee_ui_1 <- renderUI({
+    req(Consignee_1())
+    pickerInput(
+      inputId = "Consignee_1",
+      label = "Please select the consignees",
+      choices = Consignee_1(),
+      selected = Consignee_1(),
+      options = list(`actions-box` = TRUE),
+      multiple = TRUE
+    )
+  })
+  Consignee_data_1 <- reactive({
+    req(country_data_1())
+    d_filtered <- country_data_1()
+    
+    if (!("All consignees" %in% input$Consignee_1 )) {
+      d_filtered <- d_filtered %>% filter(Consignee %in% input$Consignee_1)
+    }
+    return(data.frame(d_filtered))
+  })
+  
+  
+  Medicine_1 <- reactive({
+    req(Consignee_data_1())
+    unique(Consignee_data_1()["Medicine"])
   })
   output$Medicine_ui_1 <- renderUI({
     req(Medicine_1())
@@ -142,8 +194,8 @@ function(input, output, session) {
     selectInput("Medicine_1", "Please select the medicines", choices = c("All medicines", Medicine_1()),multiple = TRUE, selected = "All medicines")
   })
   medicine_data_1 <- reactive({
-    req(country_data_1())
-    d_filtered <- country_data_1()
+    req(Consignee_data_1())
+    d_filtered <- Consignee_data_1()
     
     if (!("All medicines" %in% input$Medicine_1)) {
       d_filtered <- d_filtered %>% filter(Medicine %in% input$Medicine_1)
@@ -170,11 +222,24 @@ function(input, output, session) {
     return(data.frame(d_filtered))
   })
   
+  MA_1=reactive({
+    req(filtered_data_1())
+    
+    Ma=unique(filtered_data_1()$Manuifacturer)
+    Me=unique(filtered_data_1()$Medicine)
+    Co=unique(filtered_data_1()$Country)
+    Gr=unique(filtered_data_1()$Gregorian_year)
+    
+    d=MA() %>% filter(Manufacturer %in% Ma &
+                      Medicine %in% Me &
+                      Country %in% Co &
+                      Gregorian_year %in% Gr )
+  })
   
   # Sales tabels -----------------------------------------------------
   data_table_1 <- eventReactive(input$calcButton_1, {
     vars <- syms(c(input$V_Year_1, input$V_Month_1, "Category", "Manufacturer", "Country", "Consignee",
-                   "Medicine", "Dosage", "Total_Net",
+                   "Medicine", "Dosage", "Status" ,"Total_Net",
                    "Total_Gross", "QTY"))
     vars <- vars[!vars %in% as.character(NULL)]
     
@@ -375,6 +440,66 @@ function(input, output, session) {
     )
   })
   
+  # MA plots============================================
+  
+    data_plot_year_MA <- eventReactive(input$calcButton_1,{
+    req(filtered_data_1(),input$V_Year_1) 
+    
+    data_temp <- filtered_data_1() %>%
+      group_by(!!!sym(input$V_Year_1),Status) %>% 
+      summarise(Total_Net= sum(Total_Net,na.rm=TRUE)
+                # ,
+                # Quantity=sum(QTY,na.rm=TRUE)
+                ) 
+    data_plot_year <- data_temp
+    
+    return(data_plot_year)
+  })
+  output$plot_year_MA <- renderPlotly({
+    req(data_plot_year_MA(), input$V_Year_1)
+    
+    data_to_plot <- data_plot_year_MA() %>%
+      mutate(x_year = factor(!!sym(input$V_Year_1)))
+    
+    # 1. Re-introduce the color generation logic
+    num_years <- n_distinct(data_to_plot$x_year)
+    color_generator <- colorRampPalette(c("#272121", "#DB6400"))
+    professional_palette <- color_generator(num_years)
+    
+    p <- plot_ly(
+      data = data_to_plot,
+      x = ~Status,
+      y = ~Total_Net,
+      color = ~x_year,
+      # 2. Apply the generated palette
+      colors = professional_palette,
+      type = 'bar',
+      texttemplate = '%{y:$,.0f}',
+      textposition = 'outside',
+      hovertemplate = paste0(
+        '<b>%{x}</b><br>',
+        'Year: %{fullData.name}<br>',
+        'Total Net: %{y:$,.0f}<extra></extra>'
+      )
+    ) %>%
+      layout(
+        title = "Total Net by MA Status and Year",
+        xaxis = list(
+          title = "MA Status",
+          tickangle = 0
+        ),
+        yaxis = list(
+          title = "Total Net",
+          range = c(0, max(data_to_plot$Total_Net, na.rm = TRUE) * 1.15)
+        ),
+        barmode = 'group',
+        legend = list(title = list(text = '<b> Year </b>')),
+        margin = list(b = 150)
+      )
+    
+    p
+  })
+  
   # Sales plots -----------------------------------------------------
   
   data_plot_year <- eventReactive(input$calcButton_1,{
@@ -423,7 +548,7 @@ function(input, output, session) {
         title = "Total Net by Manufacturer and Year",
         xaxis = list(
           title = "Manufacturer",
-          tickangle = -45
+          tickangle = 0
         ),
         yaxis = list(
           title = "Total Net",
@@ -510,6 +635,85 @@ function(input, output, session) {
       layout(
         title = "Total Net by Country",
         xaxis = list(title = "", categoryorder = "array", categoryarray = ~Country),
+        yaxis = list(title = "Total Net")
+      )
+    
+    p
+  })
+  
+  data_plot_Consignee <- eventReactive(input$calcButton_1, {
+    req(filtered_data_1())
+    
+    data_temp <- filtered_data_1() %>%
+      group_by(Consignee) %>%
+      summarise(Total_Net = sum(Total_Net, na.rm = TRUE)) %>%
+      arrange(desc(Total_Net))
+    
+    top_5_countries <- data_temp %>%
+      slice_head(n = 9)
+    
+    other_countries <- data_temp %>%
+      slice_tail(n = -9) %>%
+      summarise(Consignee = "Other Consignees", Total_Net = sum(Total_Net, na.rm = TRUE))
+    
+    data_plot_Consignee <- bind_rows(top_5_countries, other_countries)
+    
+    # --- CHANGE START ---
+    # Explicitly set the factor levels to control the bar order in the plot.
+    # This makes "Other Consignee" the last level because it's the last row.
+    data_plot_Consignee$Consignee <- factor(data_plot_Consignee$Consignee, levels = data_plot_Consignee$Consignee)
+    # --- CHANGE END ---
+    
+    return(data_plot_Consignee)
+  })
+  output$plot_Consignee <- renderPlotly({
+    req(data_plot_Consignee())
+    
+    # data_to_plot already has Consignee as an ordered factor
+    data_to_plot <- data_plot_Consignee()
+    
+    # --- MODIFIED COLOR LOGIC START ---
+    
+    # 1. Separate the top 5 countries to assign them the gradient
+    top_5_for_colors <- data_to_plot %>%
+      filter(Consignee != "Other Consignees") %>%
+      arrange(desc(Total_Net))
+    
+    # 2. Generate the full color palette
+    num_countries <- nrow(data_to_plot)
+    color_generator <- colorRampPalette(c("#DB6400", "#272121"))
+    full_palette <- color_generator(num_countries)
+    
+    # 3. The first (n-1) colors are for the top 5, and the very last color is for "Other"
+    top_5_colors <- head(full_palette, -1)
+    other_color <- tail(full_palette, 1)
+    
+    # 4. Create a map: assign the gradient to the top 5 and the last color to "Other Consignee"
+    color_map <- c(
+      setNames(top_5_colors, top_5_for_colors$Consignee),
+      "Other Consignees" = other_color
+    )
+    
+    # 5. Apply the colors using the map. The bar order is still preserved.
+    data_to_plot$bar_colors <- color_map[as.character(data_to_plot$Consignee)]
+    
+    # --- MODIFIED COLOR LOGIC END ---
+    
+    p <- plot_ly(
+      data = data_to_plot,
+      x = ~Consignee,
+      y = ~Total_Net,
+      type = 'bar',
+      marker = list(color = ~bar_colors),
+      hovertemplate = '<b>%{x}</b><br>Total Net: %{y:$,.0f}<extra></extra>',
+      texttemplate = '%{y:$,.0f}',
+      textposition = 'outside',
+      textfont = list(color = ~bar_colors)
+      
+    ) %>%
+      layout(
+        title = "Total Net by Consignee",
+        xaxis = list(title = "", categoryorder = "array", categoryarray = ~Consignee),
         yaxis = list(title = "Total Net")
       )
     
@@ -1595,4 +1799,5 @@ function(input, output, session) {
                 , file, row.names = FALSE)
     }
   )
+  
 }

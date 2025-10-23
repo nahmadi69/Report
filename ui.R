@@ -16,6 +16,7 @@ library(reactable)
 library(bsicons) # Added for value box icons
 library(scales)
 library(shinyWidgets) # <-- Add this line
+library(lubridate)
 
 # A custom function to create a value box output, simplifying the UI code
 value_box_output <- function(id) {
@@ -67,6 +68,7 @@ ui <- page_fluid(
                 sidebar = sidebar(
                   width = 300,
                   fileInput("file_1", "Upload your export file", accept = c(".xlsx")),
+                  fileInput("MA", "Upload your MA file", accept = c(".xlsx")),
                   accordion(
                     accordion_panel(
                       "Date selection panel",
@@ -80,6 +82,7 @@ ui <- page_fluid(
                       uiOutput("Month_ui_1"),
                       uiOutput("Manufacturer_ui_1"),
                       uiOutput("Country_ui_1"),
+                      uiOutput("Consignee_ui_1"),
                       uiOutput("Medicine_ui_1"),
                       uiOutput("Dosage_ui_1")#,
                     ),
@@ -110,15 +113,17 @@ ui <- page_fluid(
                   ),
                   accordion_panel("Year and Manufacturer Plot", style = "width: 1500px;", plotlyOutput('plot_year')),
                   accordion_panel("Country Plot", style = "width: 1500px;", plotlyOutput('plot_Country')),
-                  # accordion_panel(
-                  #   "Table Country",
-                  #   style = "width: 1500px;",
-                  #   reactableOutput("data_country111"),
-                  #   downloadButton("downloadTable111", "Download Table", class = "btn-sm btn-secondary mt-2")
-                  # ),      
+                  accordion_panel("Consignee Plot", style = "width: 1500px;", plotlyOutput('plot_Consignee')),
                   accordion_panel("Category Plot", style = "width: 1500px;", plotlyOutput("plot_Category")),
                   accordion_panel("Medicine Plot", style = "width: 1500px;", plotlyOutput("plot_Medicine")),
+                  accordion_panel("Year and MA status Plot", style = "width: 1500px;", plotlyOutput('plot_year_MA')),
                   accordion_panel("New Exports", style = "width: 1500px;", plotlyOutput("plot_heat_map")),
+                  accordion_panel(
+                    "Table Country",
+                    style = "width: 1500px;",
+                    reactableOutput("data_country111"),
+                    downloadButton("downloadTable111", "Download Table", class = "btn-sm btn-secondary mt-2")
+                  ),
                   accordion_panel(
                     "Additional data",
                     style = "width: 1500px;",

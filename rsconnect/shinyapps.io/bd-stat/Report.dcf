@@ -5,7 +5,7 @@ account: bd-stat
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 11393976
-bundleId: 10781996
+bundleId: 11074230
 url: https://bd-stat.shinyapps.io/Report/
 version: 1
 asMultiple: FALSE
