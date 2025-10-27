@@ -375,6 +375,28 @@ function(input, output, session) {
       write.csv(data_plot_Medicine_year(), file, row.names = FALSE)
     }
   )
+  
+  data_plot_Consignee_year <- eventReactive(input$calcButton_1,{
+    req(filtered_data_1(),input$V_Year_1) 
+    
+    data_temp <- filtered_data_1() %>% 
+      group_by(!!!sym(input$V_Year_1),Consignee) %>% 
+      summarise(Total_Net= round(sum(Total_Net,na.rm=TRUE))
+                # ,
+                # Quantity=round(sum(QTY,na.rm=TRUE))
+      ) 
+    return(data_temp)
+  })
+  output$downloadTable_consignee <- downloadHandler(
+    filename = function() {
+      paste("table1-", Sys.Date(), ".csv", sep="")
+    },
+    content = function(file) {
+      write.csv(data_plot_Consignee_year(), file, row.names = FALSE)
+    }
+  )
+  
+  
   # NEW: Export Value Box Rendering ============================================
   
   export_card_data <- eventReactive(input$calcButton_1, {

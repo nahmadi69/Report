@@ -119,18 +119,12 @@ ui <- page_fluid(
                   accordion_panel("Year and MA status Plot", style = "width: 1500px;", plotlyOutput('plot_year_MA')),
                   accordion_panel("New Exports", style = "width: 1500px;", plotlyOutput("plot_heat_map")),
                   accordion_panel(
-                    "Table Country",
-                    style = "width: 1500px;",
-                    reactableOutput("data_country111"),
-                    downloadButton("downloadTable111", "Download Table", class = "btn-sm btn-secondary mt-2")
-                  ),
-                  accordion_panel(
                     "Additional data",
                     style = "width: 1500px;",
                     downloadButton("downloadTable_country", "Download Country year data", class = "btn-sm btn-secondary mt-2"),
-                    downloadButton("downloadTable_medicine", "Download Medicine year data", class = "btn-sm btn-secondary mt-2")
+                    downloadButton("downloadTable_medicine", "Download Medicine year data", class = "btn-sm btn-secondary mt-2"),
+                    downloadButton("downloadTable_consignee", "Download consignee year data", class = "btn-sm btn-secondary mt-2")
                   ),      
-                  
                 )
               )
     ),
