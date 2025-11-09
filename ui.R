@@ -66,7 +66,7 @@ ui <- page_fluid(
     nav_panel("Export",
               layout_sidebar(
                 sidebar = sidebar(
-                  width = 300,
+                  width = 450,
                   fileInput("file_1", "Upload your export file", accept = c(".xlsx")),
                   fileInput("MA", "Upload your MA file", accept = c(".xlsx")),
                   accordion(
@@ -117,13 +117,20 @@ ui <- page_fluid(
                   accordion_panel("Category Plot", style = "width: 1500px;", plotlyOutput("plot_Category")),
                   accordion_panel("Medicine Plot", style = "width: 1500px;", plotlyOutput("plot_Medicine")),
                   accordion_panel("Year and MA status Plot", style = "width: 1500px;", plotlyOutput('plot_year_MA')),
+                  accordion_panel(
+                    "Export With MA Percent Table",
+                    style = "width: 1500px;",
+                    reactableOutput("data_11"),
+                    downloadButton("downloadTable_MA_percent", "Download Table", class = "btn-sm btn-secondary mt-2")
+                  ),
                   accordion_panel("New Exports", style = "width: 1500px;", plotlyOutput("plot_heat_map")),
                   accordion_panel(
                     "Additional data",
                     style = "width: 1500px;",
                     downloadButton("downloadTable_country", "Download Country year data", class = "btn-sm btn-secondary mt-2"),
                     downloadButton("downloadTable_medicine", "Download Medicine year data", class = "btn-sm btn-secondary mt-2"),
-                    downloadButton("downloadTable_consignee", "Download consignee year data", class = "btn-sm btn-secondary mt-2")
+                    downloadButton("downloadTable_consignee", "Download consignee year data", class = "btn-sm btn-secondary mt-2"),
+                    downloadButton("downloadTable_MA", "Download MA list", class = "btn-sm btn-secondary mt-2")
                   ),      
                 )
               )

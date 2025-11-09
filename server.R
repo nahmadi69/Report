@@ -12,7 +12,8 @@ function(input, output, session) {
     read_excel(input$MA$datapath,sheet = "MA") %>%
       mutate(
         Start = year(Real_registration),
-        Finish = year(Expiry_registration)
+        Finish = year(Expiry_registration),
+        Finish = if_else(is.na(Finish),year(Sys.Date())+2,Finish)
       ) %>%
       select(Manufacturer, Product, Country, Start, Finish) %>%
       mutate(Finish = ifelse(is.na(Finish), Start, Finish)) %>%
@@ -34,8 +35,6 @@ function(input, output, session) {
       left_join(MA()) %>% 
       mutate(Status=if_else(is.na(Status),"Without MA Approval",Status))
   })
- 
-  
   
   Category_1 <- reactive({
     req(data_1())
@@ -63,7 +62,6 @@ function(input, output, session) {
     return(data.frame(d_filtered))
   })
   
-  
   output$V_Year_ui_1 <- renderUI({
     req(data_1())
     selectInput("V_Year_1", "Please select the year variable", choices = colnames(data_1()),selected = "Gregorian_year")
@@ -85,7 +83,6 @@ function(input, output, session) {
     }
     return(data.frame(d_filtered))
   })
-  
   
   output$V_Month_ui_1 <- renderUI({
     req(data_1())
@@ -110,7 +107,6 @@ function(input, output, session) {
     return(data.frame(d_filtered))
   })
   
- 
   Manufacturer_1 <- reactive({
     req(Month_data_1())
     unique(Month_data_1()["Manufacturer"])
@@ -128,7 +124,6 @@ function(input, output, session) {
     }
     return(data.frame(d_filtered))
   })
-  
   
   Country_1 <- reactive({
     req(manufacturer_data_1())
@@ -156,7 +151,6 @@ function(input, output, session) {
     return(data.frame(d_filtered))
   })
   
-  
   Consignee_1 <- reactive({
     req(country_data_1())
     country_data_1=country_data_1() %>% arrange(Consignee)
@@ -183,7 +177,6 @@ function(input, output, session) {
     return(data.frame(d_filtered))
   })
   
-  
   Medicine_1 <- reactive({
     req(Consignee_data_1())
     unique(Consignee_data_1()["Medicine"])
@@ -202,7 +195,6 @@ function(input, output, session) {
     }
     return(data.frame(d_filtered))
   })
-  
   
   Dosage_1 <- reactive({
     req(medicine_data_1())
@@ -225,7 +217,7 @@ function(input, output, session) {
   MA_1=reactive({
     req(filtered_data_1())
     
-    Ma=unique(filtered_data_1()$Manuifacturer)
+    Ma=unique(filtered_data_1()$Manufacturer)
     Me=unique(filtered_data_1()$Medicine)
     Co=unique(filtered_data_1()$Country)
     Gr=unique(filtered_data_1()$Gregorian_year)
@@ -349,7 +341,7 @@ function(input, output, session) {
   })
   output$downloadTable_country <- downloadHandler(
     filename = function() {
-      paste("table1-", Sys.Date(), ".csv", sep="")
+      paste("Country_year-", Sys.Date(), ".csv", sep="")
     },
     content = function(file) {
       write.csv(data_plot_Country_year(), file, row.names = FALSE)
@@ -369,7 +361,7 @@ function(input, output, session) {
   })
   output$downloadTable_medicine <- downloadHandler(
     filename = function() {
-      paste("table1-", Sys.Date(), ".csv", sep="")
+      paste("Medicine-", Sys.Date(), ".csv", sep="")
     },
     content = function(file) {
       write.csv(data_plot_Medicine_year(), file, row.names = FALSE)
@@ -389,13 +381,71 @@ function(input, output, session) {
   })
   output$downloadTable_consignee <- downloadHandler(
     filename = function() {
-      paste("table1-", Sys.Date(), ".csv", sep="")
+      paste("Consignee-", Sys.Date(), ".csv", sep="")
     },
     content = function(file) {
       write.csv(data_plot_Consignee_year(), file, row.names = FALSE)
     }
   )
   
+  output$downloadTable_MA <- downloadHandler(
+    filename = function() {
+      paste("MA-", Sys.Date(), ".csv", sep="")
+    },
+    content = function(file) {
+      write.csv(MA_1(), file, row.names = FALSE)
+    }
+  )
+  
+  percent_with_ma_country <- eventReactive(input$calcButton_1, {
+    req(MA_1(),filtered_data_1())
+    
+    result <-filtered_data_1()%>%
+      collect() %>%
+      group_by(Manufacturer,Medicine,Country,Gregorian_year, Status) %>%
+      summarise(Total_Net = sum(Total_Net, na.rm = TRUE)) %>%
+      ungroup()
+    
+    result <- MA_1() %>%
+      full_join(result) %>%
+      mutate(Total_Net=if_else(is.na(Total_Net),0,Total_Net))
+    
+    result
+  })
+  output$data_11 <- renderReactable({
+    req(percent_with_ma_country())
+    reactable(
+      percent_with_ma_country(),
+      columns = list(
+        Total_Net = colDef(
+          format = colFormat(separators = TRUE, digits = 0),
+          defaultSortOrder = "desc"
+        )
+      ),
+      pagination = TRUE,
+      defaultPageSize = 15,
+      pageSizeOptions = c(10, 20, 50),
+      filterable = TRUE,
+      searchable = TRUE,
+      striped = TRUE,
+      highlight = TRUE,
+      bordered = TRUE,
+      theme = reactableTheme(
+        borderColor = "#dfe2e5",
+        stripedColor = "#f6f8fa",
+        highlightColor = "#f0f5f9",
+        cellPadding = "8px 12px"
+      )
+    )
+  })
+  output$downloadTable_MA_percent <- downloadHandler(
+    filename = function() {
+      paste("table2-", Sys.Date(), ".csv", sep="")
+    },
+    content = function(file) {
+      write.csv(percent_with_ma_country(), file, row.names = FALSE)
+    }
+  )
   
   # NEW: Export Value Box Rendering ============================================
   
@@ -464,7 +514,7 @@ function(input, output, session) {
   
   # MA plots============================================
   
-    data_plot_year_MA <- eventReactive(input$calcButton_1,{
+  data_plot_year_MA <- eventReactive(input$calcButton_1,{
     req(filtered_data_1(),input$V_Year_1) 
     
     data_temp <- filtered_data_1() %>%
@@ -522,6 +572,7 @@ function(input, output, session) {
     p
   })
   
+
   # Sales plots -----------------------------------------------------
   
   data_plot_year <- eventReactive(input$calcButton_1,{
