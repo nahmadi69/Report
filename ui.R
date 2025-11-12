@@ -13,26 +13,29 @@ library(tidyr)
 library(scales)
 library(bslib)
 library(reactable)
-library(bsicons) # Added for value box icons
+library(bsicons)
 library(scales)
-library(shinyWidgets) # <-- Add this line
+library(shinyWidgets)
 library(lubridate)
 
-# A custom function to create a value box output, simplifying the UI code
 value_box_output <- function(id) {
   uiOutput(id)
 }
 
 ui <- page_fluid(
   theme = bs_theme(
-    bootswatch = "cosmo",
-    primary = "#0077be",
+    bootswatch = "flatly",
+    primary = "#214b72",
+    secondary = "#adb5bd",
+    bg = "#f8f9fb",
+    fg = "#2c3e50",
     "enable-rounded" = TRUE,
-    "body-bg" = "#f8f9fa"
+    "font-size-base" = "1rem",
+    "font-family-base" = "'Segoe UI', 'Arial', sans-serif"
   ),
   layout_column_wrap(
     width = 1,
-    style = "background: linear-gradient(to right, #f8f9fa, #e9ecef); padding: 5px; border-bottom: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.1);",
+    style = "background: #f8f9fb; padding: 5px; border-bottom: 1px solid #dee2e6; box-shadow: 0 2px 8px rgba(34,74,94,0.07);",
     card(
       full_screen = FALSE,
       height = "auto",
@@ -42,7 +45,7 @@ ui <- page_fluid(
         div(
           class = "d-flex align-items-center",
           h3("Export and Forecast Dashboard", 
-             style = "color: #3c4858; font-weight: 400; margin: 0; font-size: 1.2rem;")
+             style = "color: #214b72; font-weight: 600; margin: 0; font-size: 1.3rem; letter-spacing:0.02em;")
         )
       )
     )
@@ -50,15 +53,139 @@ ui <- page_fluid(
   tags$head(
     tags$style(HTML("
       body {
-          overflow-y: scroll;
-          overflow-x: scroll;
-          font-family: 'Open Sans';
-          background-color: #f7f7f7;
-        }
-      .tab-content { padding-top: 20px; }
-      .accordion-item { margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,.1); }
-      .accordion-button { background-color: #f8f9fa; }
-      .accordion-button:not(.collapsed) { background-color: #e9ecef; }
+        font-family: 'Segoe UI', 'Arial', sans-serif;
+        background-color: #f8f9fb;
+      }
+      .tab-content { padding-top: 16px; }
+      .accordion-item { 
+        margin-bottom: 15px; 
+        box-shadow: 0 2px 8px rgba(33,75,114,0.08); 
+        border-radius: 8px;
+        border: 1px solid #e3e6ea;
+      }
+      .accordion-button { 
+        background-color: #ffffff; 
+        font-weight: 600;
+        color: #214b72;
+        padding: 12px 16px;
+      }
+      .accordion-button:not(.collapsed) { 
+        background-color: #f0f4f8;
+        color: #214b72;
+      }
+      .accordion-button:hover {
+        background-color: #f8f9fb;
+      }
+      .accordion-body {
+        padding: 16px;
+        background-color: #ffffff;
+      }
+      .card, .bslib-card { 
+        background-color: #fff; 
+        border: 1px solid #dee2e6; 
+        border-radius: 10px;
+      }
+      .value-box, .bslib-value-box { 
+        border-radius: 10px !important; 
+      }
+      
+      /* Formal Resizable Sidebar */
+      .resizable-sidebar { 
+        position: relative; 
+      }
+      .sidebar-resizer {
+        position: absolute;
+        right: 0; 
+        top: 0; 
+        bottom: 0;
+        width: 8px;
+        cursor: ew-resize;
+        background: transparent;
+        z-index: 1000;
+        border-right: 1px solid #ced4da;
+        transition: background 0.2s;
+      }
+      .sidebar-resizer:hover {
+        background: #e9ecef;
+      }
+      .sidebar-resizer:active {
+        background: #b0c4da;
+      }
+      .bslib-sidebar-layout { 
+        --_sidebar-width: 450px;
+      }
+      .no-select { 
+        user-select: none; 
+      }
+      .sidebar { 
+        border-right: 1.5px solid #dee2e6; 
+        background: #f6f7fa; 
+      }
+      
+      /* File input section styling */
+      .file-upload-section {
+        margin-bottom: 15px;
+        padding: 15px;
+        background: #ffffff;
+        border-radius: 8px;
+        border: 1px solid #e3e6ea;
+      }
+      .section-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #214b72;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #e3e6ea;
+      }
+    ")),
+    tags$script(HTML("
+      $(document).ready(function() {
+        let isResizing = false;
+        let startX, startWidth;
+        let currentSidebar = null;
+        
+        // Add resizer handle to all sidebars
+        $('.bslib-sidebar-layout > .sidebar').each(function() {
+          if ($(this).find('.sidebar-resizer').length === 0) {
+            $(this).addClass('resizable-sidebar');
+            $(this).append('<div class=\"sidebar-resizer\"></div>');
+          }
+        });
+        
+        $(document).on('mousedown', '.sidebar-resizer', function(e) {
+          isResizing = true;
+          startX = e.clientX;
+          currentSidebar = $(this).closest('.sidebar');
+          startWidth = currentSidebar.outerWidth();
+          $('body').addClass('no-select');
+          e.preventDefault();
+        });
+        
+        $(document).on('mousemove', function(e) {
+          if (!isResizing || !currentSidebar) return;
+          const newWidth = startWidth + (e.clientX - startX);
+          if (newWidth >= 260 && newWidth <= 700) {
+            currentSidebar.closest('.bslib-sidebar-layout').css('--_sidebar-width', newWidth + 'px');
+          }
+        });
+        
+        $(document).on('mouseup', function() {
+          if (isResizing) {
+            isResizing = false;
+            currentSidebar = null;
+            $('body').removeClass('no-select');
+          }
+        });
+        
+        $(document).on('mouseleave', function() {
+          if (isResizing) {
+            isResizing = false;
+            currentSidebar = null;
+            $('body').removeClass('no-select');
+          }
+        });
+      });
     "))
   ),
   
@@ -67,16 +194,24 @@ ui <- page_fluid(
               layout_sidebar(
                 sidebar = sidebar(
                   width = 450,
-                  fileInput("file_1", "Upload your export file", accept = c(".xlsx")),
-                  fileInput("MA", "Upload your MA file", accept = c(".xlsx")),
+                  
+                  # File Upload Section (always visible)
+                  div(
+                    class = "file-upload-section",
+                    div(class = "section-title", "Data Upload"),
+                    fileInput("file_1", "Upload your export file", accept = c(".xlsx")),
+                    fileInput("MA", "Upload your MA file", accept = c(".xlsx"))
+                  ),
+                  
+                  # Collapsible Accordion Sections
                   accordion(
                     accordion_panel(
-                      "Date selection panel",
+                      "Date Selection",
                       uiOutput("V_Year_ui_1"),
                       uiOutput("V_Month_ui_1")
                     ),
                     accordion_panel(
-                      "Filters panel",
+                      "Filters",
                       uiOutput("Category_ui_1"),
                       uiOutput("Year_ui_1"),
                       uiOutput("Month_ui_1"),
@@ -84,23 +219,30 @@ ui <- page_fluid(
                       uiOutput("Country_ui_1"),
                       uiOutput("Consignee_ui_1"),
                       uiOutput("Medicine_ui_1"),
-                      uiOutput("Dosage_ui_1")#,
-                    ),
-                    card(
-                      actionButton("calcButton_1", "Calculate", class = "btn-primary btn-block mt-3")
-                      # img(src = "CinnaGen_Logo.png", height = 80, width = 160, style = "object-fit: contain; margin-right: 20px;"),
-                    )                    
+                      uiOutput("Dosage_ui_1")
+                    )
                   ),
+                  
+                  # Action Button
                   card(
-                    card_footer("Author: Naser Ahmadi", a(href = "mailto:Naserahmadi3002@gmail.com", "Email"))
+                    style = "margin-top: 15px;",
+                    actionButton("calcButton_1", "Calculate", 
+                                 class = "btn-primary btn-block",
+                                 style = "font-weight: 500;")
+                  ),
+                  
+                  # Footer
+                  card(
+                    card_footer("Author: Naser Ahmadi", 
+                                a(href = "mailto:Naserahmadi3002@gmail.com", "Email"))
                   )
                 ),
-                # NEW: Export-specific key metric cards
+                
+                # Main content area
                 layout_column_wrap(
-                  width = "250px",
+                  width = "240px",
                   fill = FALSE,
                   value_box_output("total_net_export_card"),
-                  # value_box_output("total_qty_export_card"),
                   value_box_output("top_export_country_card"),
                   value_box_output("top_export_medicine_card")
                 ),
@@ -131,23 +273,32 @@ ui <- page_fluid(
                     downloadButton("downloadTable_medicine", "Download Medicine year data", class = "btn-sm btn-secondary mt-2"),
                     downloadButton("downloadTable_consignee", "Download consignee year data", class = "btn-sm btn-secondary mt-2"),
                     downloadButton("downloadTable_MA", "Download MA list", class = "btn-sm btn-secondary mt-2")
-                  ),      
+                  )
                 )
               )
     ),
+    
     nav_panel("Forecast",
               layout_sidebar(
                 sidebar = sidebar(
                   width = 300,
-                  fileInput("file_forcast", "Upload your forecast file", accept = c(".xlsx")),
-                  fileInput("file_sales", "Upload your sales file", accept = c(".xlsx")),
+                  
+                  # File Upload Section (always visible)
+                  div(
+                    class = "file-upload-section",
+                    div(class = "section-title", "Data Upload"),
+                    fileInput("file_forcast", "Upload your forecast file", accept = c(".xlsx")),
+                    fileInput("file_sales", "Upload your sales file", accept = c(".xlsx"))
+                  ),
+                  
+                  # Collapsible Accordion Sections
                   accordion(
                     accordion_panel(
-                      "Date selection panel",
+                      "Date Selection",
                       uiOutput("V_Year_ui_2")
                     ),
                     accordion_panel(
-                      "Filters panel",
+                      "Filters",
                       uiOutput("Probability_ui_2"),
                       uiOutput("Category_ui_2"),
                       uiOutput("Year_ui_2"),
@@ -156,29 +307,31 @@ ui <- page_fluid(
                       uiOutput("Medicine_ui_2"),
                       uiOutput("Dosage_ui_2"),
                       uiOutput("type_ui_2")
-                      # ,
-                      # RESTORED: Calculate button for forecast tab
-                      # actionButton("calcButton_2", "Calculate", class = "btn-primary btn-block mt-3")
-                    ),
-                    card(
-                      # img(src = "CinnaGen_Logo.png", height = 80, width = 160, style = "object-fit: contain; margin-right: 20px;"),
-                      actionButton("calcButton_2", "Calculate", class = "btn-primary btn-block mt-3")
-                      
                     )
                   ),
+                  
+                  # Action Button
                   card(
-                    card_footer("Author: Naser Ahmadi", a(href = "mailto:Naserahmadi3002@gmail.com", "Email"))
+                    style = "margin-top: 15px;",
+                    actionButton("calcButton_2", "Calculate", 
+                                 class = "btn-primary btn-block",
+                                 style = "font-weight: 500;")
+                  ),
+                  
+                  # Footer
+                  card(
+                    card_footer("Author: Naser Ahmadi", 
+                                a(href = "mailto:Naserahmadi3002@gmail.com", "Email"))
                   )
                 ),
-                # Main content area with forecast cards and accordion
+                
+                # Main content area
                 div(
-                  # MOVED BACK: Forecast comparison cards
                   layout_column_wrap(
-                    width = "250px",
+                    width = "240px",
                     fill = FALSE,
                     value_box_output("forecast_card"),
                     value_box_output("actual_card"),
-                    # value_box_output("achievement_card"),
                     value_box_output("top_country_card"),
                     value_box_output("top_medicine_card")
                   ),
@@ -201,3 +354,5 @@ ui <- page_fluid(
     )
   )
 )
+
+ 

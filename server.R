@@ -230,7 +230,7 @@ function(input, output, session) {
   
   # Sales tabels -----------------------------------------------------
   data_table_1 <- eventReactive(input$calcButton_1, {
-    vars <- syms(c(input$V_Year_1, input$V_Month_1, "Category", "Manufacturer", "Country", "Consignee",
+    vars <- syms(c(input$V_Year_1, input$V_Month_1, "Category","Invoice", "Manufacturer", "Country", "Consignee",
                    "Medicine", "Dosage", "Status" ,"Total_Net",
                    "Total_Gross", "QTY"))
     vars <- vars[!vars %in% as.character(NULL)]
