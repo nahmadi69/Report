@@ -14,7 +14,6 @@ library(scales)
 library(bslib)
 library(reactable)
 library(bsicons)
-library(scales)
 library(shinyWidgets)
 library(lubridate)
 
@@ -33,6 +32,8 @@ ui <- page_fluid(
     "font-size-base" = "1rem",
     "font-family-base" = "'Segoe UI', 'Arial', sans-serif"
   ),
+  
+  # Header
   layout_column_wrap(
     width = 1,
     style = "background: #f8f9fb; padding: 5px; border-bottom: 1px solid #dee2e6; box-shadow: 0 2px 8px rgba(34,74,94,0.07);",
@@ -50,26 +51,30 @@ ui <- page_fluid(
       )
     )
   ),
+  
+  # Custom CSS and JavaScript
   tags$head(
     tags$style(HTML("
       body {
         font-family: 'Segoe UI', 'Arial', sans-serif;
         background-color: #f8f9fb;
       }
-      .tab-content { padding-top: 16px; }
-      .accordion-item { 
-        margin-bottom: 15px; 
-        box-shadow: 0 2px 8px rgba(33,75,114,0.08); 
+      .tab-content {
+        padding-top: 16px;
+      }
+      .accordion-item {
+        margin-bottom: 15px;
+        box-shadow: 0 2px 8px rgba(33,75,114,0.08);
         border-radius: 8px;
         border: 1px solid #e3e6ea;
       }
-      .accordion-button { 
-        background-color: #ffffff; 
+      .accordion-button {
+        background-color: #ffffff;
         font-weight: 600;
         color: #214b72;
         padding: 12px 16px;
       }
-      .accordion-button:not(.collapsed) { 
+      .accordion-button:not(.collapsed) {
         background-color: #f0f4f8;
         color: #214b72;
       }
@@ -80,23 +85,23 @@ ui <- page_fluid(
         padding: 16px;
         background-color: #ffffff;
       }
-      .card, .bslib-card { 
-        background-color: #fff; 
-        border: 1px solid #dee2e6; 
+      .card, .bslib-card {
+        background-color: #fff;
+        border: 1px solid #dee2e6;
         border-radius: 10px;
       }
-      .value-box, .bslib-value-box { 
-        border-radius: 10px !important; 
+      .value-box, .bslib-value-box {
+        border-radius: 10px !important;
       }
-      
+
       /* Formal Resizable Sidebar */
-      .resizable-sidebar { 
-        position: relative; 
+      .resizable-sidebar {
+        position: relative;
       }
       .sidebar-resizer {
         position: absolute;
-        right: 0; 
-        top: 0; 
+        right: 0;
+        top: 0;
         bottom: 0;
         width: 8px;
         cursor: ew-resize;
@@ -111,17 +116,17 @@ ui <- page_fluid(
       .sidebar-resizer:active {
         background: #b0c4da;
       }
-      .bslib-sidebar-layout { 
+      .bslib-sidebar-layout {
         --_sidebar-width: 450px;
       }
-      .no-select { 
-        user-select: none; 
+      .no-select {
+        user-select: none;
       }
-      .sidebar { 
-        border-right: 1.5px solid #dee2e6; 
-        background: #f6f7fa; 
+      .sidebar {
+        border-right: 1.5px solid #dee2e6;
+        background: #f6f7fa;
       }
-      
+
       /* File input section styling */
       .file-upload-section {
         margin-bottom: 15px;
@@ -138,13 +143,21 @@ ui <- page_fluid(
         padding-bottom: 8px;
         border-bottom: 2px solid #e3e6ea;
       }
+
+      /* Responsive accordion width - FIXED */
+      .accordion-panel-content {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+      }
     ")),
+    
     tags$script(HTML("
       $(document).ready(function() {
         let isResizing = false;
         let startX, startWidth;
         let currentSidebar = null;
-        
+
         // Add resizer handle to all sidebars
         $('.bslib-sidebar-layout > .sidebar').each(function() {
           if ($(this).find('.sidebar-resizer').length === 0) {
@@ -152,7 +165,7 @@ ui <- page_fluid(
             $(this).append('<div class=\"sidebar-resizer\"></div>');
           }
         });
-        
+
         $(document).on('mousedown', '.sidebar-resizer', function(e) {
           isResizing = true;
           startX = e.clientX;
@@ -161,7 +174,7 @@ ui <- page_fluid(
           $('body').addClass('no-select');
           e.preventDefault();
         });
-        
+
         $(document).on('mousemove', function(e) {
           if (!isResizing || !currentSidebar) return;
           const newWidth = startWidth + (e.clientX - startX);
@@ -169,7 +182,7 @@ ui <- page_fluid(
             currentSidebar.closest('.bslib-sidebar-layout').css('--_sidebar-width', newWidth + 'px');
           }
         });
-        
+
         $(document).on('mouseup', function() {
           if (isResizing) {
             isResizing = false;
@@ -177,7 +190,7 @@ ui <- page_fluid(
             $('body').removeClass('no-select');
           }
         });
-        
+
         $(document).on('mouseleave', function() {
           if (isResizing) {
             isResizing = false;
@@ -189,7 +202,9 @@ ui <- page_fluid(
     "))
   ),
   
+  # Main Tabs
   navset_tab(
+    # Export Tab
     nav_panel("Export",
               layout_sidebar(
                 sidebar = sidebar(
@@ -227,14 +242,15 @@ ui <- page_fluid(
                   card(
                     style = "margin-top: 15px;",
                     actionButton("calcButton_1", "Calculate", 
-                                 class = "btn-primary btn-block",
+                                 class = "btn-primary btn-block", 
                                  style = "font-weight: 500;")
                   ),
                   
                   # Footer
                   card(
-                    card_footer("Author: Naser Ahmadi", 
-                                a(href = "mailto:Naserahmadi3002@gmail.com", "Email"))
+                    card_footer(
+                      "Author: Naser Ahmadi"
+                    )
                   )
                 ),
                 
@@ -246,38 +262,50 @@ ui <- page_fluid(
                   value_box_output("top_export_country_card"),
                   value_box_output("top_export_medicine_card")
                 ),
+                
                 accordion(
                   accordion_panel(
                     "Data Table",
-                    style = "width: 1500px;",
                     reactableOutput("data_1"),
-                    downloadButton("downloadTable1", "Download Table", class = "btn-sm btn-secondary mt-2")
+                    downloadButton("downloadTable1", "Download Table", 
+                                   class = "btn-sm btn-secondary mt-2")
                   ),
-                  accordion_panel("Year and Manufacturer Plot", style = "width: 1500px;", plotlyOutput('plot_year')),
-                  accordion_panel("Country Plot", style = "width: 1500px;", plotlyOutput('plot_Country')),
-                  accordion_panel("Consignee Plot", style = "width: 1500px;", plotlyOutput('plot_Consignee')),
-                  accordion_panel("Category Plot", style = "width: 1500px;", plotlyOutput("plot_Category")),
-                  accordion_panel("Medicine Plot", style = "width: 1500px;", plotlyOutput("plot_Medicine")),
-                  accordion_panel("Year and MA status Plot", style = "width: 1500px;", plotlyOutput('plot_year_MA')),
+                  accordion_panel("Year and Manufacturer Plot", 
+                                  plotlyOutput('plot_year')),
+                  accordion_panel("Country Plot", 
+                                  plotlyOutput('plot_Country')),
+                  accordion_panel("Consignee Plot", 
+                                  plotlyOutput('plot_Consignee')),
+                  accordion_panel("Category Plot", 
+                                  plotlyOutput("plot_Category")),
+                  accordion_panel("Medicine Plot", 
+                                  plotlyOutput("plot_Medicine")),
+                  accordion_panel("Year and MA status Plot", 
+                                  plotlyOutput('plot_year_MA')),
                   accordion_panel(
                     "Export With MA Percent Table",
-                    style = "width: 1500px;",
                     reactableOutput("data_11"),
-                    downloadButton("downloadTable_MA_percent", "Download Table", class = "btn-sm btn-secondary mt-2")
+                    downloadButton("downloadTable_MA_percent", "Download Table", 
+                                   class = "btn-sm btn-secondary mt-2")
                   ),
-                  accordion_panel("New Exports", style = "width: 1500px;", plotlyOutput("plot_heat_map")),
+                  accordion_panel("New Exports", 
+                                  plotlyOutput("plot_heat_map")),
                   accordion_panel(
                     "Additional data",
-                    style = "width: 1500px;",
-                    downloadButton("downloadTable_country", "Download Country year data", class = "btn-sm btn-secondary mt-2"),
-                    downloadButton("downloadTable_medicine", "Download Medicine year data", class = "btn-sm btn-secondary mt-2"),
-                    downloadButton("downloadTable_consignee", "Download consignee year data", class = "btn-sm btn-secondary mt-2"),
-                    downloadButton("downloadTable_MA", "Download MA list", class = "btn-sm btn-secondary mt-2")
+                    downloadButton("downloadTable_country", "Download Country year data", 
+                                   class = "btn-sm btn-secondary mt-2"),
+                    downloadButton("downloadTable_medicine", "Download Medicine year data", 
+                                   class = "btn-sm btn-secondary mt-2"),
+                    downloadButton("downloadTable_consignee", "Download consignee year data", 
+                                   class = "btn-sm btn-secondary mt-2"),
+                    downloadButton("downloadTable_MA", "Download MA list", 
+                                   class = "btn-sm btn-secondary mt-2")
                   )
                 )
               )
     ),
     
+    # Forecast Tab
     nav_panel("Forecast",
               layout_sidebar(
                 sidebar = sidebar(
@@ -314,14 +342,15 @@ ui <- page_fluid(
                   card(
                     style = "margin-top: 15px;",
                     actionButton("calcButton_2", "Calculate", 
-                                 class = "btn-primary btn-block",
+                                 class = "btn-primary btn-block", 
                                  style = "font-weight: 500;")
                   ),
                   
                   # Footer
                   card(
-                    card_footer("Author: Naser Ahmadi", 
-                                a(href = "mailto:Naserahmadi3002@gmail.com", "Email"))
+                    card_footer(
+                      "Author: Naser Ahmadi"
+                    )
                   )
                 ),
                 
@@ -335,24 +364,29 @@ ui <- page_fluid(
                     value_box_output("top_country_card"),
                     value_box_output("top_medicine_card")
                   ),
+                  
                   accordion(
                     accordion_panel(
                       "Data Table",
-                      style = "width: 1500px;",
                       reactableOutput("data_2"),
-                      downloadButton("downloadTable2", "Download Table", class = "btn-sm btn-secondary mt-2")
+                      downloadButton("downloadTable2", "Download Table", 
+                                     class = "btn-sm btn-secondary mt-2")
                     ),
-                    accordion_panel("Year Forecast", style = "width: 1500px;", plotlyOutput('plot_Year_Forcast')),
-                    accordion_panel("Manufacturer Forecast", style = "width: 1500px;", plotlyOutput('plot_Manufacturer_Forcast')),
-                    accordion_panel("Medicine Forecast", style = "width: 1500px;", plotlyOutput('plot_Medicine_Forcast')),
-                    accordion_panel("Country Forecast", style = "width: 1500px;", plotlyOutput('plot_Country_Forcast')),
-                    accordion_panel("Manufacturer Forecast Net", style = "width: 1500px;", plotlyOutput('plot_Manufacturer_Forcast_Net')),
-                    accordion_panel("Medicine Forecast Net", style = "width: 1500px;", plotlyOutput('plot_Medicine_Forcast_Net'))
+                    accordion_panel("Year Forecast", 
+                                    plotlyOutput('plot_Year_Forcast')),
+                    accordion_panel("Manufacturer Forecast", 
+                                    plotlyOutput('plot_Manufacturer_Forcast')),
+                    accordion_panel("Medicine Forecast", 
+                                    plotlyOutput('plot_Medicine_Forcast')),
+                    accordion_panel("Country Forecast", 
+                                    plotlyOutput('plot_Country_Forcast')),
+                    accordion_panel("Manufacturer Forecast Net", 
+                                    plotlyOutput('plot_Manufacturer_Forcast_Net')),
+                    accordion_panel("Medicine Forecast Net", 
+                                    plotlyOutput('plot_Medicine_Forcast_Net'))
                   )
                 )
               )
     )
   )
 )
-
- 
