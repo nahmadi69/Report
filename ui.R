@@ -208,7 +208,7 @@ ui <- page_fluid(
     nav_panel("Export",
               layout_sidebar(
                 sidebar = sidebar(
-                  width = 450,
+                  width = 300,
                   
                   # File Upload Section (always visible)
                   div(
@@ -334,7 +334,6 @@ ui <- page_fluid(
                       uiOutput("Country_ui_2"),
                       uiOutput("Medicine_ui_2"),
                       uiOutput("Dosage_ui_2"),
-                      uiOutput("type_ui_2")
                     )
                   ),
                   
@@ -380,10 +379,7 @@ ui <- page_fluid(
                                     plotlyOutput('plot_Medicine_Forcast')),
                     accordion_panel("Country Forecast", 
                                     plotlyOutput('plot_Country_Forcast')),
-                    accordion_panel("Manufacturer Forecast Net", 
-                                    plotlyOutput('plot_Manufacturer_Forcast_Net')),
-                    accordion_panel("Medicine Forecast Net", 
-                                    plotlyOutput('plot_Medicine_Forcast_Net'))
+
                   )
                 )
               )
