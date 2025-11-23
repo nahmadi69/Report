@@ -310,13 +310,11 @@ function(input, output, session) {
   data_table_1 <- eventReactive(input$calcButton_1, {
     req(filtered_data_1())
     
-    vars <- syms(c(input$V_Year_1, input$V_Month_1, "Category", "Invoice", "Manufacturer", 
-                   "Country", "Consignee", "Medicine", "Dosage", "Status", "Total_Net",
-                   "Total_Gross", "QTY"))
-    vars <- vars[!sapply(vars, is.null)]
+    vars <- c(input$V_Year_1, input$V_Month_1, "Category", "Invoice", "Manufacturer", "Country", 
+              "Consignee", "Medicine", "Dosage", "Status", "Total_Net", "Total_Gross", "QTY")
+    vars <- vars[vars %in% colnames(filtered_data_1())]
+    filtered_data_1() %>% select(all_of(vars))
     
-    filtered_data_1() %>%
-      select(!!!vars)
   })
   
   output$data_1 <- renderReactable({
