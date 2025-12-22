@@ -1,5 +1,15 @@
 function(input, output, session) {
   
+  # Your sheet ID
+  SHEET_ID <- "13EYwvmP5uWQP_movX4vITdj8KtP6RiRi0WhNfJiXjVA"
+  gs4_deauth()
+  
+  # MA_base <- read_sheet(SHEET_ID)
+  
+  status_palette_cached <- memoise::memoise(function(num_status) {
+    generate_palette(num_status, c("#DB6400", "#272121"))
+  })
+  
   # Helper function for color palette generation
   generate_palette <- function(n, colors = c("#DB6400", "#272121")) {
     colorRampPalette(colors)(n)
@@ -24,40 +34,55 @@ function(input, output, session) {
     gc()
   })
   
-  # Sales data cleaning with error handling -----------------------------------------------------
-  
   MA <- reactive({
-    req(input$MA)
-    
     tryCatch({
-      read_excel(input$MA$datapath, sheet = "MA") %>%
-        mutate(
-          Start = year(Real_registration),
-          Finish = year(Expiry_registration),
-          Finish = if_else(is.na(Finish), year(Sys.Date()) + 2, Finish)
-        ) %>%
-        select(Manufacturer, Product, Country, Start, Finish) %>%
-        mutate(Finish = ifelse(is.na(Finish), Start, Finish)) %>%
-        rowwise() %>%
-        mutate(Gregorian_year = list(Start:Finish)) %>%
-        unnest(Gregorian_year) %>%
-        ungroup() %>%
-        select(Manufacturer, Product, Country, Gregorian_year) %>%
-        distinct() %>%
-        mutate(Status = "With MA Approval") %>%
-        rename(Medicine = Product)
+     read_sheet(SHEET_ID)%>%
+        mutate(Status = "With MA Approval") %>% 
+        select( "Gregorian_year"
+               ,"Medicine"                   
+               ,"Dosage"                     
+               ,"Manufacturer"               
+               ,"Country"
+               ,"Registration_date_Gregorian"
+               ,"Expiry_date_Gregorian"
+               ,"Expiration_status"
+               ,"Project_Status"
+               ,"Status"  )
     }, error = function(e) {
       showNotification(paste("Error loading MA file:", e$message), type = "error")
       return(NULL)
     })
   })
   
+  # Export data cleaning with error handling ----------------------------------------------------
   data_1 <- reactive({
     req(input$file_1)
     
     tryCatch({
-      read_excel(input$file_1$datapath, sheet = "Export") %>%
-        left_join(MA(), by = c("Manufacturer", "Medicine", "Country", "Gregorian_year")) %>%
+      ex=read_excel(input$file_1$datapath, sheet = "Export") 
+      ex_with_dosage <- ex %>%
+        filter(!is.na(Dosage) & Dosage != "")
+      
+      ex_without_dosage <- ex %>%
+        filter(is.na(Dosage) | Dosage == "")
+      
+      # 2) Join each part
+      joined_with_dosage <- ex_with_dosage %>%
+        left_join(
+          MA(),
+          by = c("Medicine", "Manufacturer", "Country", "Gregorian_year", "Dosage")
+        )
+      
+      joined_without_dosage <- ex_without_dosage %>%
+        left_join(
+          MA() %>% select(-Dosage),
+          by = c("Medicine", "Manufacturer", "Country", "Gregorian_year")
+        )
+      
+      # 3) Append (stack) them again
+      result <- bind_rows(joined_with_dosage, joined_without_dosage)%>% 
+        # filter(!is.na(Total_Net))%>%
+        relocate(Dosage, .after = Medicine) %>%
         mutate(Status = if_else(is.na(Status), "Without MA Approval", Status))
     }, error = function(e) {
       showNotification(paste("Error loading Export file:", e$message), type = "error")
@@ -70,7 +95,6 @@ function(input, output, session) {
     req(data_1())
     unique(data_1()[["Category"]])
   })
-  
   output$Category_ui_1 <- renderUI({
     req(Category_1())
     pickerInput(
@@ -82,16 +106,19 @@ function(input, output, session) {
       multiple = TRUE
     )
   })
-  
   Category_data_1 <- reactive({
-    req(data_1())
+    req(data_1(), input$Category_1)
     d_filtered <- data_1()
     
-    if (!("All Categories" %in% input$Category_1)) {
-      d_filtered <- d_filtered %>% filter(Category %in% input$Category_1)
+    all_categories <- Category_1()
+    
+    # If user selected a proper subset, filter; if all selected, keep full data
+    if (!setequal(input$Category_1, all_categories)) {
+      d_filtered <- d_filtered %>%
+        dplyr::filter(Category %in% input$Category_1)
     }
     
-    return(d_filtered)
+    d_filtered
   })
   
   # Filter Chain 2 - Year Variable Selection
@@ -100,19 +127,16 @@ function(input, output, session) {
     selectInput("V_Year_1", "Please select the year variable", 
                 choices = colnames(data_1()), selected = "Gregorian_year")
   })
-  
   Year_1 <- reactive({
     req(Category_data_1(), input$V_Year_1)
     unique(Category_data_1()[[input$V_Year_1]])
   })
-  
   output$Year_ui_1 <- renderUI({
     req(Year_1(), input$V_Year_1)
     selectInput("Year_1", "Please select the years", 
                 choices = c("All years", Year_1()), 
                 multiple = TRUE, selected = "All years")
   })
-  
   year_data_1 <- reactive({
     req(Category_data_1())
     d_filtered <- Category_data_1()
@@ -130,20 +154,17 @@ function(input, output, session) {
     selectInput("V_Month_1", "Please select the Month variable", 
                 choices = colnames(data_1()), selected = "Gregorian_month")
   })
-  
   Month_1 <- reactive({
     req(year_data_1(), input$V_Month_1)
     d <- year_data_1() %>% arrange(!!sym(input$V_Month_1))  # Fixed: was !!!sym
     unique(d[[input$V_Month_1]])
   })
-  
   output$Month_ui_1 <- renderUI({
     req(Month_1(), input$V_Month_1)
     selectInput("Month_1", "Please select the Months", 
                 choices = c("All Months", Month_1()), 
                 multiple = TRUE, selected = "All Months")
   })
-  
   Month_data_1 <- reactive({
     req(year_data_1())
     d_filtered <- year_data_1()
@@ -160,14 +181,12 @@ function(input, output, session) {
     req(Month_data_1())
     unique(Month_data_1()[["Manufacturer"]])
   })
-  
   output$Manufacturer_ui_1 <- renderUI({
     req(Manufacturer_1())
     selectInput("Manufacturer_1", "Please select the manufacturers", 
                 choices = c("All manufacturers", Manufacturer_1()), 
                 multiple = TRUE, selected = "All manufacturers")
   })
-  
   manufacturer_data_1 <- reactive({
     req(Month_data_1())
     d_filtered <- Month_data_1()
@@ -185,7 +204,6 @@ function(input, output, session) {
     manufacturer_data_1_sorted <- manufacturer_data_1() %>% arrange(Country)
     unique(manufacturer_data_1_sorted[["Country"]])
   })
-  
   output$Country_ui_1 <- renderUI({
     req(Country_1())
     pickerInput(
@@ -197,16 +215,19 @@ function(input, output, session) {
       multiple = TRUE
     )
   })
-  
   country_data_1 <- reactive({
-    req(manufacturer_data_1())
+    req(manufacturer_data_1(), input$Country_1)
     d_filtered <- manufacturer_data_1()
     
-    if (!("All countries" %in% input$Country_1)) {
-      d_filtered <- d_filtered %>% filter(Country %in% input$Country_1)
+    all_countries <- Country_1()
+    
+    # If user has selected a proper subset, filter; otherwise return full data
+    if (!setequal(input$Country_1, all_countries)) {
+      d_filtered <- d_filtered %>%
+        dplyr::filter(Country %in% input$Country_1)
     }
     
-    return(d_filtered)
+    d_filtered
   })
   
   # Filter Chain 6 - Consignee
@@ -215,7 +236,6 @@ function(input, output, session) {
     country_data_1_sorted <- country_data_1() %>% arrange(Consignee)
     unique(country_data_1_sorted[["Consignee"]])
   })
-  
   output$Consignee_ui_1 <- renderUI({
     req(Consignee_1())
     pickerInput(
@@ -227,16 +247,19 @@ function(input, output, session) {
       multiple = TRUE
     )
   })
-  
   Consignee_data_1 <- reactive({
-    req(country_data_1())
+    req(country_data_1(), input$Consignee_1)
     d_filtered <- country_data_1()
     
-    if (!("All consignees" %in% input$Consignee_1)) {
-      d_filtered <- d_filtered %>% filter(Consignee %in% input$Consignee_1)
+    all_cons <- Consignee_1()
+    
+    # Only filter when a proper subset of consignees is selected
+    if (!setequal(input$Consignee_1, all_cons)) {
+      d_filtered <- d_filtered %>%
+        dplyr::filter(Consignee %in% input$Consignee_1)
     }
     
-    return(d_filtered)
+    d_filtered
   })
   
   # Filter Chain 7 - Medicine
@@ -244,14 +267,12 @@ function(input, output, session) {
     req(Consignee_data_1())
     unique(Consignee_data_1()[["Medicine"]])
   })
-  
   output$Medicine_ui_1 <- renderUI({
     req(Medicine_1())
     selectInput("Medicine_1", "Please select the medicines", 
                 choices = c("All medicines", Medicine_1()), 
                 multiple = TRUE, selected = "All medicines")
   })
-  
   medicine_data_1 <- reactive({
     req(Consignee_data_1())
     d_filtered <- Consignee_data_1()
@@ -268,14 +289,12 @@ function(input, output, session) {
     req(medicine_data_1())
     unique(medicine_data_1()[["Dosage"]])
   })
-  
   output$Dosage_ui_1 <- renderUI({
     req(Dosage_1())
     selectInput("Dosage_1", "Please select the dosages", 
                 choices = c("All Dosages", Dosage_1()), 
                 multiple = TRUE, selected = "All Dosages")
   })
-  
   filtered_data_1 <- reactive({
     req(medicine_data_1())
     d_filtered <- medicine_data_1()
@@ -286,26 +305,7 @@ function(input, output, session) {
     
     return(d_filtered)
   })
-  
-  # MA_1 reactive
-  MA_1 <- reactive({
-    req(filtered_data_1(), MA())
-    
-    Ma <- unique(filtered_data_1()$Manufacturer)
-    Me <- unique(filtered_data_1()$Medicine)
-    Co <- unique(filtered_data_1()$Country)
-    Gr <- unique(filtered_data_1()$Gregorian_year)
-    
-    MA() %>% 
-      filter(
-        Manufacturer %in% Ma &
-          Medicine %in% Me &
-          Country %in% Co &
-          Gregorian_year %in% Gr
-      )
-  })
-
-  # Sales tables -----------------------------------------------------
+  # Export tables -----------------------------------------------------
   
   data_table_1 <- eventReactive(input$calcButton_1, {
     req(filtered_data_1())
@@ -420,70 +420,6 @@ function(input, output, session) {
     }
   )
 
-  output$downloadTable_MA <- downloadHandler(
-    filename = function() {
-      req(MA_1())
-      paste("MA-", Sys.Date(), ".csv", sep = "")
-    },
-    content = function(file) {
-      req(MA_1())
-      write.csv(MA_1(), file, row.names = FALSE)
-    }
-  )
-
-  # MA Percent Table
-  percent_with_ma_country <- eventReactive(input$calcButton_1, {
-    req(MA_1(), filtered_data_1())
-    
-    result <- filtered_data_1() %>%
-      group_by(Manufacturer, Medicine, Country, Gregorian_year, Status) %>%
-      summarise(Total_Net = sum(Total_Net, na.rm = TRUE), .groups = "drop")
-    
-    result <- MA_1() %>%
-      full_join(result, by = c("Manufacturer", "Medicine", "Country", "Gregorian_year")) %>%
-      mutate(Total_Net = if_else(is.na(Total_Net), 0, Total_Net))
-    
-    return(result)
-  })
-
-  output$data_11 <- renderReactable({
-    req(percent_with_ma_country())
-    
-    reactable(
-      percent_with_ma_country(),
-      columns = list(
-        Total_Net = colDef(
-          format = colFormat(separators = TRUE, digits = 0),
-          defaultSortOrder = "desc"
-        )
-      ),
-      pagination = TRUE,
-      defaultPageSize = 15,
-      pageSizeOptions = c(10, 20, 50),
-      filterable = TRUE,
-      searchable = TRUE,
-      striped = TRUE,
-      highlight = TRUE,
-      bordered = TRUE,
-      theme = reactableTheme(
-        borderColor = "#dfe2e5",
-        stripedColor = "#f6f8fa",
-        highlightColor = "#f0f5f9",
-        cellPadding = "8px 12px"
-      )
-    )
-  })
-
-  output$downloadTable_MA_percent <- downloadHandler(
-    filename = function() {
-      req(percent_with_ma_country())
-      paste("table2-", Sys.Date(), ".csv", sep = "")
-    },
-    content = function(file) {
-      req(percent_with_ma_country())
-      write.csv(percent_with_ma_country(), file, row.names = FALSE)
-    }
-  )
 
   # Export Value Box Rendering ============================================
   
@@ -552,56 +488,7 @@ function(input, output, session) {
     )
   })
   
-  # MA plots ============================================
-  
-  data_plot_year_MA <- eventReactive(input$calcButton_1, {
-    req(filtered_data_1(), input$V_Year_1)
-    
-    filtered_data_1() %>%
-      group_by(!!sym(input$V_Year_1), Status) %>%
-      summarise(Total_Net = sum(Total_Net, na.rm = TRUE), .groups = "drop")
-  })
-  
-  output$plot_year_MA <- renderPlotly({
-    req(data_plot_year_MA(), input$V_Year_1)
-    
-    data_to_plot <- data_plot_year_MA() %>%
-      mutate(x_year = factor(!!sym(input$V_Year_1)))
-    
-    num_years <- n_distinct(data_to_plot$x_year)
-    professional_palette <- generate_palette(num_years, c("#272121", "#DB6400"))
-    
-    p <- plot_ly(
-      data = data_to_plot,
-      x = ~Status,
-      y = ~Total_Net,
-      color = ~x_year,
-      colors = professional_palette,
-      type = 'bar',
-      texttemplate = '%{y:$,.0f}',
-      textposition = 'outside',
-      hovertemplate = paste0(
-        '%{x}<br>',
-        'Year: %{fullData.name}<br>',
-        'Total Net: %{y:$,.0f}<extra></extra>'
-      )
-    ) %>%
-      layout(
-        title = "Total Net by MA Status and Year",
-        xaxis = list(title = "MA Status", tickangle = 0),
-        yaxis = list(
-          title = "Total Net",
-          range = c(0, max(data_to_plot$Total_Net, na.rm = TRUE) * 1.15)
-        ),
-        barmode = 'group',
-        legend = list(title = list(text = 'Year')),
-        margin = list(b = 150)
-      )
-    
-    p
-  })
-  
-  # Sales plots -----------------------------------------------------
+  # Export plots -----------------------------------------------------
   
   data_plot_year <- eventReactive(input$calcButton_1, {
     req(filtered_data_1(), input$V_Year_1)
@@ -1642,4 +1529,490 @@ function(input, output, session) {
       write.csv(data, file, row.names = FALSE)
     }
   )
+
+  # MA cleaning -------------------------------------------------------------
+  data_MA <- reactive({
+    req(input$file_MA)
+    
+    tryCatch({
+      ex=read_excel(input$file_MA$datapath, sheet = "Export") %>% 
+        select(Gregorian_year,Category,Country,Consignee,Manufacturer,Medicine,Dosage,Total_Net)
+      ex_with_dosage <- ex %>%
+        filter(!is.na(Dosage) & Dosage != "")
+      
+      ex_without_dosage <- ex %>%
+        filter(is.na(Dosage) | Dosage == "")
+      
+      # 2) Join each part
+      joined_with_dosage <- ex_with_dosage %>%
+        full_join(
+          MA(),
+          by = c("Medicine", "Manufacturer", "Country", "Gregorian_year", "Dosage")
+        )
+      
+      joined_without_dosage <- ex_without_dosage %>%
+        full_join(
+          MA() %>% select(-Dosage),
+          by = c("Medicine", "Manufacturer", "Country", "Gregorian_year")
+        )
+      
+      # 3) Append (stack) them again
+      result <- bind_rows(joined_with_dosage, joined_without_dosage)%>%
+        relocate(Dosage, .after = Medicine) %>%
+        mutate(Status = if_else(is.na(Status), "Without MA Approval", Status))
+    }, error = function(e) {
+      showNotification(paste("Error loading Export file:", e$message), type = "error")
+      return(NULL)
+    })
+  })
+  
+  Year_MA <- reactive({
+    req(data_MA())
+    unique(data_MA()[["Gregorian_year"]])
+  })
+  output$Year_ui_MA <- renderUI({
+    req(Year_MA())
+    selectInput("Year_MA", "Please select the years", 
+                choices = c("All years", Year_MA()), 
+                multiple = TRUE, selected = "All years")
+  })
+  year_data_MA <- reactive({
+    req(data_MA())
+    d_filtered <- data_MA()
+    
+    if (!("All years" %in% input$Year_MA)) {
+      d_filtered <- d_filtered %>% filter(Gregorian_year %in% input$Year_MA)
+    }
+    
+    return(d_filtered)
+  })
+  MA_year <- reactive({
+    req(MA())
+    d_filtered <- MA()
+    
+    if (!("All years" %in% input$Year_MA)) {
+      d_filtered <- d_filtered %>% filter(Gregorian_year %in% input$Year_MA)
+    }
+    
+    return(d_filtered)
+  })
+  
+
+  Manufacturer_MA <- reactive({
+    req(year_data_MA())
+    unique(year_data_MA()[["Manufacturer"]])
+  })
+  output$Manufacturer_ui_MA <- renderUI({
+    req(Manufacturer_MA())
+    selectInput("Manufacturer_MA", "Please select the manufacturers", 
+                choices = c("All manufacturers", Manufacturer_MA()), 
+                multiple = TRUE, selected = "All manufacturers")
+  })
+  manufacturer_data_MA <- reactive({
+    req(year_data_MA())
+    d_filtered <- year_data_MA()
+    
+    if (!("All manufacturers" %in% input$Manufacturer_MA)) {
+      d_filtered <- d_filtered %>% filter(Manufacturer %in% input$Manufacturer_MA)
+    }
+    
+    return(d_filtered)
+  })
+  MA_Manufacturer <- reactive({
+    req(MA_year())
+    d_filtered <- MA_year()
+    
+    if (!("All manufacturers" %in% input$Manufacturer_MA)) {
+      d_filtered <- d_filtered %>% filter(Manufacturer %in% input$Manufacturer_MA)
+    }
+    
+    return(d_filtered)
+  })
+  
+    
+  Country_MA <- reactive({
+    req(manufacturer_data_MA())
+    manufacturer_data_1_sorted <- manufacturer_data_MA() %>% arrange(Country)
+    unique(manufacturer_data_1_sorted[["Country"]])
+  })
+  output$Country_ui_MA <- renderUI({
+    req(Country_MA())
+    pickerInput(
+      inputId = "Country_MA",
+      label = "Please select the countries",
+      choices = Country_MA(),
+      selected = Country_MA(),
+      options = list(`actions-box` = TRUE),
+      multiple = TRUE
+    )
+  })
+  country_data_MA <- reactive({
+    req(manufacturer_data_MA())
+    d_filtered <- manufacturer_data_MA()
+    
+    if (!("All countries" %in% input$Country_MA)) {
+      d_filtered <- d_filtered %>% filter(Country %in% input$Country_MA)
+    }
+    
+    return(d_filtered)
+  })
+  MA_country <- reactive({
+    req(MA_Manufacturer())
+    d_filtered <- MA_Manufacturer()
+    
+    if (!("All countries" %in% input$Country_MA)) {
+      d_filtered <- d_filtered %>% filter(Country %in% input$Country_MA)
+    }
+    
+    return(d_filtered)
+  })
+  
+  
+  Medicine_MA <- reactive({
+    req(country_data_MA())
+    unique(country_data_MA()[["Medicine"]])
+  })
+  output$Medicine_ui_MA <- renderUI({
+    req(Medicine_MA())
+    selectInput("Medicine_MA", "Please select the medicines", 
+                choices = c("All medicines", Medicine_MA()), 
+                multiple = TRUE, selected = "All medicines")
+  })
+  medicine_data_MA <- reactive({
+    req(country_data_MA())
+    d_filtered <- country_data_MA()
+    
+    if (!("All medicines" %in% input$Medicine_MA)) {
+      d_filtered <- d_filtered %>% filter(Medicine %in% input$Medicine_MA)
+    }
+    
+    return(d_filtered)
+  })
+  MA_medicine <- reactive({
+    req(MA_country())
+    d_filtered <- MA_country()
+    
+    if (!("All medicines" %in% input$Medicine_MA)) {
+      d_filtered <- d_filtered %>% filter(Medicine %in% input$Medicine_MA)
+    }
+    
+    return(d_filtered)
+  })
+  
+  
+  Dosage_MA <- reactive({
+    req(medicine_data_MA())
+    unique(medicine_data_MA()[["Dosage"]])
+  })
+  output$Dosage_ui_MA <- renderUI({
+    req(Dosage_MA())
+    selectInput("Dosage_MA", "Please select the dosages", 
+                choices = c("All Dosages", Dosage_MA()), 
+                multiple = TRUE, selected = "All Dosages")
+  })
+  filtered_data_MA <- reactive({
+    req(medicine_data_MA())
+    d_filtered <- medicine_data_MA()
+    
+    if (!("All Dosages" %in% input$Dosage_MA)) {
+      d_filtered <- d_filtered %>% filter(Dosage %in% input$Dosage_MA)
+    }
+    
+    return(d_filtered)
+  })
+  MA_1 <- reactive({
+    req(MA_medicine())
+    d_filtered <- MA_medicine()
+    
+    if (!("All Dosages" %in% input$Dosage_MA)) {
+      d_filtered <- d_filtered %>% filter(Dosage %in% input$Dosage_MA)
+    }
+    
+    return(d_filtered)
+  })
+  
+
+  # MA plots ============================================
+  
+  data_plot_year_MA <- eventReactive(input$calcButton_MA, {
+    req(filtered_data_MA())
+    # req(nrow(filtered_data_1()) > 0)
+    
+    df <- filtered_data_MA() %>% mutate(Total_Net=if_else(is.na(Total_Net),0,Total_Net))
+    
+    # Validate required columns
+    required_cols <- c("Gregorian_year", "Status", "Total_Net")
+    req(all(required_cols %in% names(df)))
+    
+    df %>%
+      group_by(Gregorian_year, Status) %>%
+      summarise(Total_Net = sum(Total_Net, na.rm = TRUE), .groups = "drop") %>%
+      mutate(Gregorian_year = factor(Gregorian_year))
+  })
+  output$plot_year_MA <- renderPlotly({
+    req(data_plot_year_MA())
+
+    data_to_plot <- data_plot_year_MA()
+
+    # Colors for Status
+    num_status <- dplyr::n_distinct(data_to_plot$Status)
+    status_palette <- generate_palette(num_status, c("#DB6400", "#272121"))
+
+    # ggplot with facet_wrap
+    p <- ggplot2::ggplot(
+      data_to_plot,
+      ggplot2::aes(
+        x = Gregorian_year,
+        y = Total_Net,
+        fill = Status,
+        text = paste0(
+          "Year: ", Gregorian_year, "<br>",
+          "Status: ", Status, "<br>",
+          "Total Net: ", scales::dollar(Total_Net, accuracy = 1)
+        )
+      )
+    ) +
+      ggplot2::geom_col(position = "stack") +
+      # ggplot2::facet_wrap(~ Manufacturer) +
+      ggplot2::scale_fill_manual(values = status_palette, name = "MA Status") +
+      ggplot2::labs(
+        title = "Total Net by Year (Stacked by MA Status)",
+        x = "Year",
+        y = "Total Net"
+      ) +
+      ggplot2::scale_y_continuous(labels = scales::dollar_format(accuracy = 1)) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        legend.position = "bottom",
+        plot.title = ggplot2::element_text(hjust = 0.5)
+      )
+
+    # Convert to plotly, use the ggplot 'text' aesthetic for tooltip
+    plotly::ggplotly(p, tooltip = "text")
+  })
+  
+  # MA tables ---------------------------------------------------------------
+  output$data_MA_11 <- renderReactable({
+    req(Ma_card_data())
+    
+    reactable(
+      Ma_card_data(),
+      pagination = TRUE,
+      defaultPageSize = 15,
+      pageSizeOptions = c(10, 20, 50),
+      filterable = TRUE,
+      searchable = TRUE,
+      striped = TRUE,
+      highlight = TRUE,
+      bordered = TRUE,
+      theme = reactableTheme(
+        borderColor = "#dfe2e5",
+        stripedColor = "#f6f8fa",
+        highlightColor = "#f0f5f9",
+        cellPadding = "8px 12px"
+      )
+    )
+  })
+  
+  
+  output$downloadTable_MA <- downloadHandler(
+    filename = function() {
+      req(data_MA_11())
+      paste("MA-", Sys.Date(), ".csv", sep = "")
+    },
+    content = function(file) {
+      df <- data_MA_11()
+      # Convert list columns (and everything else) to character
+      df_flat <- as.data.frame(lapply(df, function(col) {
+        if (is.list(col)) {
+          vapply(col, function(x) paste(as.character(x), collapse = "; "), character(1))
+        } else {
+          col
+        }
+      }), stringsAsFactors = FALSE)
+      
+      write.csv(df_flat, file, row.names = FALSE)
+    }
+  )
+  
+  filtered_data_MA_table=eventReactive(input$calcButton_MA, {
+    req(filtered_data_MA())
+    filtered_data_MA()
+  })
+  output$data_11 <- renderReactable({
+    req(filtered_data_MA_table())
+    
+    reactable(
+      filtered_data_MA_table(),
+      columns = list(
+        Total_Net = colDef(
+          format = colFormat(separators = TRUE, digits = 0),
+          defaultSortOrder = "desc"
+        )
+      ),
+      pagination = TRUE,
+      defaultPageSize = 15,
+      pageSizeOptions = c(10, 20, 50),
+      filterable = TRUE,
+      searchable = TRUE,
+      striped = TRUE,
+      highlight = TRUE,
+      bordered = TRUE,
+      theme = reactableTheme(
+        borderColor = "#dfe2e5",
+        stripedColor = "#f6f8fa",
+        highlightColor = "#f0f5f9",
+        cellPadding = "8px 12px"
+      )
+    )
+  })
+  output$downloadTable_MA_percent <- downloadHandler(
+    filename = function() {
+      req(filtered_data_MA())
+      paste("table2-", Sys.Date(), ".csv", sep = "")
+    },
+    content = function(file) {
+      df <- filtered_data_MA()
+      # Convert list columns (and everything else) to character
+      df_flat <- as.data.frame(lapply(df, function(col) {
+        if (is.list(col)) {
+          vapply(col, function(x) paste(as.character(x), collapse = "; "), character(1))
+        } else {
+          col
+        }
+      }), stringsAsFactors = FALSE)
+      
+      write.csv(df_flat, file, row.names = FALSE)
+    }
+  )
+  
+  output$downloadTable_MA_percent <- downloadHandler(
+    filename = function() {
+      req(filtered_data_MA())
+      paste("table2-", Sys.Date(), ".csv", sep = "")
+    },
+    content = function(file) {
+      df <- filtered_data_MA()
+      # Convert list columns (and everything else) to character
+      df_flat <- as.data.frame(lapply(df, function(col) {
+        if (is.list(col)) {
+          vapply(col, function(x) paste(as.character(x), collapse = "; "), character(1))
+        } else {
+          col
+        }
+      }), stringsAsFactors = FALSE)
+      
+      write.csv(df_flat, file, row.names = FALSE)
+    }
+  )
+  
+  # MA Value Box Rendering ============================================
+
+  export_card_data <- eventReactive(input$calcButton_MA, {
+    req(filtered_data_MA())
+    filtered_data_MA()
+  })
+
+  output$total_net_MA_card <- renderUI({
+    df <- export_card_data()
+    req(df, nrow(df) > 0)
+    
+    total_net_With_MA <- sum(df$Total_Net[df$Status == "With MA Approval"], na.rm = TRUE)
+    total_net_Without_MA <- sum(df$Total_Net[df$Status == "Without MA Approval"], na.rm = TRUE)
+    grand_total <- total_net_With_MA + total_net_Without_MA
+    
+    value_box(
+      title = HTML("Total Net Exports<br><small><span style='color: #1f77b4;'>With MA:</span> ", 
+                   scales::dollar(total_net_With_MA, accuracy = 1),
+                   " | ",
+                   "<span style='color: #d62728;'>Without MA:</span> ", 
+                   scales::dollar(total_net_Without_MA, accuracy = 1), "</small>"),
+      value = tags$span(scales::dollar(grand_total, accuracy = 1), 
+                        style = "font-size: 1.4rem; font-weight: bold;"),
+      showcase = bsicons::bs_icon("cash-coin"),
+      theme = "primary",
+      height = "180px",
+      div(HTML(paste0(
+        "<small style='color: #666;'>Grand Total: ", 
+        scales::dollar(grand_total, accuracy = 1), "</small>"
+      )), style = "margin-top: 5px;")
+    )
+  })
+  
+  Ma_card_data <- eventReactive(input$calcButton_MA, {
+    req(MA_1())
+    Ma=MA_1()
+    Ma=Ma %>% select("Medicine"
+                     ,"Dosage"
+                     ,"Manufacturer"
+                     ,"Country"
+                     ,"Registration_date_Gregorian"
+                     ,"Expiry_date_Gregorian"
+                     ,"Expiration_status"
+                     ,"Project_Status") %>%
+      distinct(across(c(Medicine, Dosage, Manufacturer, Country,
+                        Registration_date_Gregorian, Expiry_date_Gregorian,Expiration_status,
+                        Project_Status)))
+    
+    return(Ma)
+  })
+  
+  # output$Ma_card <- renderUI({
+  #   df <- Ma_card_data()
+  #   req(df, nrow(df) > 0)
+  #   
+  #   MA_new <- nrow(df[df$Project_Status == "new",])
+  #   MA_re_registration <- nrow(df[df$Project_Status == "re-registration",])
+  #   MA_expired <- nrow(df[df$Expiration_status == "Expired",])
+  #   total_MA <- MA_new + MA_re_registration
+  #   
+  #   value_box(
+  #     title = HTML("MA Approvals<br><small><span style='color: #1f77b4;'>New MA:</span> ", 
+  #                  scales::number(MA_new, accuracy = 1),
+  #                  " | ",
+  #                  "<span style='color: #d62728;'>Re-registered MA:</span> ", 
+  #                  scales::number(MA_re_registration, accuracy = 1), "</small>"),
+  #     value = tags$span(scales::number(total_MA, accuracy = 1), 
+  #                       style = "font-size: 1.4rem; font-weight: bold;"),
+  #     showcase = bsicons::bs_icon("cash-coin"),
+  #     theme = "primary",
+  #     height = "180px",
+  #     div(HTML(paste0(
+  #       "<small style='color: #666;'>Grand Total: ", 
+  #       scales::number(total_MA, accuracy = 1), "</small>"
+  #     )), style = "margin-top: 5px;")
+  #   )
+  # })
+  
+  output$Ma_card <- renderUI({
+    df <- Ma_card_data()
+    req(df, nrow(df) > 0)
+    
+    MA_new <- nrow(df[df$Project_Status == "new",])
+    MA_re_registration <- nrow(df[df$Project_Status == "re-registration",])
+    MA_expired <- nrow(df[df$Expiration_status == "Expired",])
+    total_MA <- MA_new + MA_re_registration
+    
+    value_box(
+      title = HTML("MA Approvals<br><small><span style='color: #1f77b4;'>New MA:</span> ", 
+                   scales::number(MA_new, accuracy = 1),
+                   " | ",
+                   "<span style='color: #d62728;'>Re-registered:</span> ", 
+                   scales::number(MA_re_registration, accuracy = 1),
+                   " | ",
+                   "<span style='color: #ff7f0e;'>Expired:</span> ", 
+                   scales::number(MA_expired, accuracy = 1), "</small>"),
+      value = tags$span(scales::number(total_MA, accuracy = 1), 
+                        style = "font-size: 1.4rem; font-weight: bold;"),
+      showcase = bsicons::bs_icon("cash-coin"),
+      theme = "primary",
+      height = "180px",
+      div(HTML(paste0(
+        "<small style='color: #666;'>Grand Total: ", 
+        scales::number(total_MA, accuracy = 1), "</small>"
+      )), style = "margin-top: 5px;")
+    )
+  })
+  
+
 }

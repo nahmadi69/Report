@@ -16,6 +16,8 @@ library(reactable)
 library(bsicons)
 library(shinyWidgets)
 library(lubridate)
+library(googlesheets4)
+
 
 value_box_output <- function(id) {
   uiOutput(id)
@@ -211,17 +213,19 @@ ui <- page_fluid(
                   width = 300,
                   
                   # File Upload Section (always visible)
-                  div(
-                    class = "file-upload-section",
-                    div(class = "section-title", "Data Upload"),
-                    fileInput("file_1", "Upload your export file", accept = c(".xlsx")),
-                    fileInput("MA", "Upload your MA file", accept = c(".xlsx"))
-                  ),
-                  
+                  # accordion(
+                  #   class = "file-upload-section",
+                  #   div(class = "section-title", "Data Upload"),
+                  #   fileInput("file_1", "Upload your export file", accept = c(".xlsx")),
+                  #   # fileInput("MA", "Upload your MA file", accept = c(".xlsx"))
+                  # ),
+                  # 
                   # Collapsible Accordion Sections
                   accordion(
                     accordion_panel(
                       "Date Selection",
+                      fileInput("file_1", "Upload your export file", accept = c(".xlsx")),
+                      h1(),
                       uiOutput("V_Year_ui_1"),
                       uiOutput("V_Month_ui_1")
                     ),
@@ -280,16 +284,6 @@ ui <- page_fluid(
                                   plotlyOutput("plot_Category")),
                   accordion_panel("Medicine Plot", 
                                   plotlyOutput("plot_Medicine")),
-                  accordion_panel("Year and MA status Plot", 
-                                  plotlyOutput('plot_year_MA')),
-                  accordion_panel(
-                    "Export With MA Percent Table",
-                    reactableOutput("data_11"),
-                    downloadButton("downloadTable_MA_percent", "Download Table", 
-                                   class = "btn-sm btn-secondary mt-2")
-                  ),
-                  accordion_panel("New Exports", 
-                                  plotlyOutput("plot_heat_map")),
                   accordion_panel(
                     "Additional data",
                     downloadButton("downloadTable_country", "Download Country year data", 
@@ -298,13 +292,80 @@ ui <- page_fluid(
                                    class = "btn-sm btn-secondary mt-2"),
                     downloadButton("downloadTable_consignee", "Download consignee year data", 
                                    class = "btn-sm btn-secondary mt-2"),
+                  )
+                )
+              )
+    ),
+    
+    nav_panel("MA",
+              layout_sidebar(
+                sidebar = sidebar(
+                  width = 300,
+                  
+                  # div(
+                  #   class = "file-upload-section",
+                  #   div(class = "section-title", "Data Upload"),
+                  #   # fileInput("MA", "Upload your MA file", accept = c(".xlsx"))
+                  # ),
+                  # Single Filters Panel (ALL filters together)
+                  accordion(
+                    accordion_panel(
+                      "Filters",
+                      fileInput("file_MA", "Upload your export file", accept = c(".xlsx")),
+                      
+                      uiOutput("Year_ui_MA"),
+                      uiOutput("Manufacturer_ui_MA"),
+                      uiOutput("Country_ui_MA"),
+                      uiOutput("Consignee_ui_MA"),
+                      uiOutput("Medicine_ui_MA"),
+                      uiOutput("Dosage_ui_MA")
+                    )
+                  ),
+                  
+                  # Action Button
+                  card(
+                    style = "margin-top: 15px;",
+                    actionButton("calcButton_MA", "Filter MA Data", 
+                                 class = "btn-primary btn-block", 
+                                 style = "font-weight: 500;")
+                  ),
+                  
+                  # Footer
+                  card(
+                    card_footer(
+                      "Author: Naser Ahmadi"
+                    )
+                  )
+                ),
+                
+                
+                
+                # Main content area (unchanged)
+                layout_column_wrap(
+                  width = "200px",
+                  fill = FALSE,
+                  value_box_output("total_net_MA_card"),
+                  value_box_output("Ma_card")
+                ),
+                
+                accordion(
+                  accordion_panel("Year and MA status Plot", 
+                                  plotlyOutput('plot_year_MA')),
+                  accordion_panel(
+                    "Export With MA Table",
+                    reactableOutput("data_11"),
+                    downloadButton("downloadTable_MA_percent", "Download Table", 
+                                   class = "btn-sm btn-secondary mt-2")
+                  ),
+                  accordion_panel(
+                    "MA Table",
+                    reactableOutput("data_MA_11"),
                     downloadButton("downloadTable_MA", "Download MA list", 
                                    class = "btn-sm btn-secondary mt-2")
                   )
                 )
               )
     ),
-    
     # Forecast Tab
     nav_panel("Forecast",
               layout_sidebar(
