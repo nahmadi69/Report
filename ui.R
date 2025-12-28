@@ -274,16 +274,144 @@ ui <- page_fluid(
                     downloadButton("downloadTable1", "Download Table", 
                                    class = "btn-sm btn-secondary mt-2")
                   ),
-                  accordion_panel("Year and Manufacturer Plot", 
-                                  plotlyOutput('plot_year')),
-                  accordion_panel("Country Plot", 
-                                  plotlyOutput('plot_Country')),
-                  accordion_panel("Consignee Plot", 
-                                  plotlyOutput('plot_Consignee')),
-                  accordion_panel("Category Plot", 
-                                  plotlyOutput("plot_Category")),
-                  accordion_panel("Medicine Plot", 
-                                  plotlyOutput("plot_Medicine")),
+                  accordion_panel(
+                    "Year and Manufacturer", # Renamed to be more generic
+                    
+                    # 1. Controls Row (Toggle Switch)
+                    fluidRow(
+                      column(
+                        width = 12,
+                        radioButtons(
+                          inputId = "view_toggle_year", # Unique ID for this specific toggle
+                          label = NULL,
+                          choices = c("Chart", "Table"), 
+                          selected = "Chart",
+                          inline = TRUE
+                        )
+                      )
+                    ),
+                    
+                    # 2. Output Area
+                    conditionalPanel(
+                      condition = "input.view_toggle_year == 'Chart'",
+                      plotlyOutput('plot_year')
+                    ),
+                    conditionalPanel(
+                      condition = "input.view_toggle_year == 'Table'",
+                      DT::DTOutput('table_year') # New table output ID
+                    )
+                  )
+                  ,
+                  accordion_panel(
+                    "Country Analysis", # Updated title
+                    
+                    # 1. Controls Row (Toggle Switch)
+                    fluidRow(
+                      column(
+                        width = 12,
+                        radioButtons(
+                          inputId = "view_toggle_country", # Unique ID for this toggle
+                          label = NULL,
+                          choices = c("Chart", "Table"), 
+                          selected = "Chart",
+                          inline = TRUE
+                        )
+                      )
+                    ),
+                    
+                    # 2. Output Area (Conditional Panels)
+                    conditionalPanel(
+                      condition = "input.view_toggle_country == 'Chart'",
+                      plotlyOutput('plot_Country')
+                    ),
+                    conditionalPanel(
+                      condition = "input.view_toggle_country == 'Table'",
+                      DT::DTOutput('table_Country') # New table output ID
+                    )
+                  )
+                  ,
+                  accordion_panel(
+                    "Consignee Analysis",
+                    
+                    # 1. Controls Row (Toggle Switch)
+                    fluidRow(
+                      column(
+                        width = 12,
+                        radioButtons(
+                          inputId = "view_toggle_consignee", # Unique ID
+                          label = NULL,
+                          choices = c("Chart", "Table"), 
+                          selected = "Chart",
+                          inline = TRUE
+                        )
+                      )
+                    ),
+                    
+                    # 2. Output Area
+                    conditionalPanel(
+                      condition = "input.view_toggle_consignee == 'Chart'",
+                      plotlyOutput('plot_Consignee')
+                    ),
+                    conditionalPanel(
+                      condition = "input.view_toggle_consignee == 'Table'",
+                      DT::DTOutput('table_Consignee')
+                    )
+                  )
+                  ,
+                  accordion_panel(
+                    "Category Analysis",
+                    
+                    # 1. Controls Row (Toggle Switch)
+                    fluidRow(
+                      column(
+                        width = 12,
+                        radioButtons(
+                          inputId = "view_toggle_category", # Unique ID
+                          label = NULL,
+                          choices = c("Chart", "Table"), 
+                          selected = "Chart",
+                          inline = TRUE
+                        )
+                      )
+                    ),
+                    
+                    # 2. Output Area
+                    conditionalPanel(
+                      condition = "input.view_toggle_category == 'Chart'",
+                      plotlyOutput('plot_Category')
+                    ),
+                    conditionalPanel(
+                      condition = "input.view_toggle_category == 'Table'",
+                      DT::DTOutput('table_Category')
+                    )
+                  ),
+                  accordion_panel(
+                    "Medicine Analysis",
+                    
+                    # 1. Controls Row (Toggle Switch)
+                    fluidRow(
+                      column(
+                        width = 12,
+                        radioButtons(
+                          inputId = "view_toggle_medicine", # Unique ID
+                          label = NULL,
+                          choices = c("Chart", "Table"), 
+                          selected = "Chart",
+                          inline = TRUE
+                        )
+                      )
+                    ),
+                    
+                    # 2. Output Area
+                    conditionalPanel(
+                      condition = "input.view_toggle_medicine == 'Chart'",
+                      plotlyOutput('plot_Medicine')
+                    ),
+                    conditionalPanel(
+                      condition = "input.view_toggle_medicine == 'Table'",
+                      DT::DTOutput('table_Medicine')
+                    )
+                  ),
                   accordion_panel(
                     "Additional data",
                     downloadButton("downloadTable_country", "Download Country year data", 
@@ -349,8 +477,33 @@ ui <- page_fluid(
                 ),
                 
                 accordion(
-                  accordion_panel("Year and MA status Plot", 
-                                  plotlyOutput('plot_year_MA')),
+                  accordion_panel(
+                    "Year and MA status", # Renamed slightly since it now contains a table too
+                    
+                    # 1. Controls Row (Toggle Switch)
+                    fluidRow(
+                      column(
+                        width = 12,
+                        radioButtons(
+                          inputId = "view_toggle_MA",
+                          label = NULL,            # Label hidden for cleaner look
+                          choices = c("Chart", "Table"), 
+                          selected = "Chart",
+                          inline = TRUE
+                        )
+                      )
+                    ),
+                    
+                    # 2. Output Area (Conditional Panels)
+                    conditionalPanel(
+                      condition = "input.view_toggle_MA == 'Chart'",
+                      plotlyOutput('plot_year_MA')
+                    ),
+                    conditionalPanel(
+                      condition = "input.view_toggle_MA == 'Table'",
+                      DT::DTOutput('table_year_MA')
+                    )
+                  ),
                   accordion_panel(
                     "Export With MA Table",
                     reactableOutput("data_11"),

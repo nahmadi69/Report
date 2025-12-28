@@ -423,30 +423,53 @@ function(input, output, session) {
 
   # Export Value Box Rendering ============================================
   
-  export_card_data <- eventReactive(input$calcButton_1, {
-    req(filtered_data_1())
-    filtered_data_1()
-  })
   
   output$total_net_export_card <- renderUI({
-    df <- export_card_data()
-    req(df, nrow(df) > 0)
+    # Loading State
+    if (is.null(filtered_data_1())) {
+      return(value_box(
+        title = "Total Net Exports", 
+        value = "Waiting...", 
+        showcase = bsicons::bs_icon("hourglass-split", animation = "spin", class = "text-muted"),
+        theme = "white",
+        class = "shadow-sm border-start border-5 border-secondary", # Grey border for loading
+        height = "150px"
+      ))
+    }
     
+    df <- filtered_data_1()
     total_net <- sum(df$Total_Net, na.rm = TRUE)
     
     value_box(
       title = "Total Net Exports",
-      value = tags$span(scales::dollar(total_net, accuracy = 1), style = "font-size: 1.2rem;"),
-      showcase = bsicons::bs_icon("cash-coin"),
-      theme = "primary",
+      value = tags$span(scales::dollar(total_net, accuracy = 0.001), style = "font-size: 1.5rem;"),
+      showcase = bsicons::bs_icon("wallet2", class = "text-primary"), # Blue Icon
+      theme = "white",
+      class = "shadow-sm border-start border-5 border-primary", # Blue accent border
       height = "150px",
-      p(HTML("&nbsp;"))
+      
+      # Explanation
+      div(class = "pt-2",
+          p(class = "text-muted small mb-0", 
+            "Aggregate net revenue from all exported units.")
+      )
     )
   })
   
   output$top_export_country_card <- renderUI({
-    df <- export_card_data()
-    req(df, nrow(df) > 0)
+    
+    df <- tryCatch(filtered_data_1(), error = function(e) NULL)
+    
+    if (is.null(filtered_data_1())) {
+      return(value_box(
+        title = "Total Net Exports", 
+        value = "Waiting...", 
+        showcase = bsicons::bs_icon("hourglass-split", animation = "spin", class = "text-muted"),
+        theme = "white",
+        class = "shadow-sm border-start border-5 border-secondary", # Grey border for loading
+        height = "150px"
+      ))
+    }
     
     top_c <- df %>%
       group_by(Country) %>%
@@ -454,21 +477,42 @@ function(input, output, session) {
       arrange(desc(total_net)) %>%
       slice(1)
     
-    req(nrow(top_c) > 0)
+    if (nrow(top_c) == 0) {
+      return(value_box(
+        title = "Top Country", value = "N/A", theme = "white", height = "150px"
+      ))
+    }
     
     value_box(
       title = "Top Export Country",
-      value = tags$span(top_c$Country, style = "font-size: 1.2rem;"),
-      showcase = bsicons::bs_icon("globe-americas"),
-      p(class = "small", paste("Value:", scales::dollar(top_c$total_net, accuracy = 1))),
-      theme = "primary",
-      height = "150px"
+      value = top_c$Country,
+      showcase = bsicons::bs_icon("geo-alt-fill", class = "text-info"), # Cyan Icon
+      theme = "white",
+      class = "shadow-sm border-start border-5 border-info", # Cyan accent border
+      height = "150px",
+      
+      # Explanation
+      div(class = "pt-2",
+          p(class = "text-muted small mb-0", 
+            paste0("Highest revenue market generating ", 
+                   scales::dollar(top_c$total_net, accuracy = 0.001), "."))
+      )
     )
   })
   
   output$top_export_medicine_card <- renderUI({
-    df <- export_card_data()
-    req(df, nrow(df) > 0)
+    df <- tryCatch(filtered_data_1(), error = function(e) NULL)
+    
+    if (is.null(filtered_data_1())) {
+      return(value_box(
+        title = "Total Net Exports", 
+        value = "Waiting...", 
+        showcase = bsicons::bs_icon("hourglass-split", animation = "spin", class = "text-muted"),
+        theme = "white",
+        class = "shadow-sm border-start border-5 border-secondary", # Grey border for loading
+        height = "150px"
+      ))
+    }
     
     top_m <- df %>%
       group_by(Medicine) %>%
@@ -476,18 +520,29 @@ function(input, output, session) {
       arrange(desc(total_net)) %>%
       slice(1)
     
-    req(nrow(top_m) > 0)
+    if (nrow(top_m) == 0) {
+      return(value_box(title = "Top Medicine", value = "N/A", theme = "white", height = "150px"))
+    }
     
     value_box(
       title = "Top Exported Medicine",
-      value = tags$span(top_m$Medicine, style = "font-size: 1.2rem;"),
-      showcase = bsicons::bs_icon("capsule"),
-      p(class = "small", paste("Value:", scales::dollar(top_m$total_net, accuracy = 1))),
-      theme = "primary",
-      height = "150px"
+      value = top_m$Medicine,
+      showcase = bsicons::bs_icon("capsule-pill", class = "text-warning"), # Orange Icon
+      theme = "white",
+      class = "shadow-sm border-start border-5 border-warning", # Orange accent border
+      height = "150px",
+      
+      # Explanation
+      div(class = "pt-2",
+          p(class = "text-muted small mb-0", 
+            paste0("Leading product contributing ", 
+                   scales::dollar(top_m$total_net, accuracy = 0.001), 
+                   " to sales."))
+      )
     )
   })
   
+
   # Export plots -----------------------------------------------------
   
   data_plot_year <- eventReactive(input$calcButton_1, {
@@ -536,6 +591,31 @@ function(input, output, session) {
       )
     
     p
+  })
+  
+  output$table_year <- DT::renderDT({
+    req(data_plot_year(), input$V_Year_1)
+    
+    # Get data
+    df <- data_plot_year()
+    
+    # Identify the dynamic year column name for the header
+    year_col_name <- input$V_Year_1
+    
+    DT::datatable(
+      df,
+      rownames = FALSE,
+      extensions = 'Buttons',
+      options = list(
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel'),
+        pageLength = 10,
+        autoWidth = TRUE
+      ),
+      # Use dynamic column names to match your input selection
+      colnames = c(year_col_name, "Manufacturer", "Total Net") 
+    ) %>%
+      DT::formatCurrency("Total_Net", currency = "$", digits = 0)
   })
   
   # Country Plot
@@ -600,6 +680,31 @@ function(input, output, session) {
     p
   })
   
+  output$table_Country <- DT::renderDT({
+    # Use raw filtered data to show ALL countries in the table
+    req(filtered_data_1())
+    
+    # Calculate Full List (No "Other Country" grouping)
+    df <- filtered_data_1() %>%
+      group_by(Country) %>%
+      summarise(Total_Net = sum(Total_Net, na.rm = TRUE), .groups = "drop") %>%
+      arrange(desc(Total_Net))
+    
+    DT::datatable(
+      df,
+      rownames = FALSE,
+      extensions = 'Buttons',
+      options = list(
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel'),
+        pageLength = 10,
+        autoWidth = TRUE
+      ),
+      colnames = c("Country", "Total Net")
+    ) %>%
+      DT::formatCurrency("Total_Net", currency = "$", digits = 0)
+  })
+  
   # Consignee Plot
   data_plot_Consignee <- eventReactive(input$calcButton_1, {
     req(filtered_data_1())
@@ -662,6 +767,31 @@ function(input, output, session) {
     p
   })
   
+  output$table_Consignee <- DT::renderDT({
+    # Use the raw filtered data, NOT the plot data (so we don't get "Other Consignees")
+    req(filtered_data_1())
+    
+    # Calculate Full List
+    df <- filtered_data_1() %>%
+      group_by(Consignee) %>%
+      summarise(Total_Net = sum(Total_Net, na.rm = TRUE), .groups = "drop") %>%
+      arrange(desc(Total_Net)) # Sort highest to lowest
+    
+    DT::datatable(
+      df,
+      rownames = FALSE,
+      extensions = 'Buttons',
+      options = list(
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel'),
+        pageLength = 10,
+        autoWidth = TRUE
+      ),
+      colnames = c("Consignee", "Total Net")
+    ) %>%
+      DT::formatCurrency("Total_Net", currency = "$", digits = 0)
+  })
+  
   # Category Plot
   data_plot_Category <- eventReactive(input$calcButton_1, {
     req(filtered_data_1())
@@ -701,6 +831,29 @@ function(input, output, session) {
     
     p
   })
+  
+  output$table_Category <- DT::renderDT({
+    req(data_plot_Category())
+    
+    # Get data
+    df <- data_plot_Category() %>%
+      arrange(desc(Total_Net)) # Ensure table is sorted by value
+    
+    DT::datatable(
+      df,
+      rownames = FALSE,
+      extensions = 'Buttons',
+      options = list(
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel'),
+        pageLength = 10,
+        autoWidth = TRUE
+      ),
+      colnames = c("Category", "Total Net")
+    ) %>%
+      DT::formatCurrency("Total_Net", currency = "$", digits = 0)
+  })
+  
   
   # Medicine Plot
   data_plot_Medicine <- eventReactive(input$calcButton_1, {
@@ -762,6 +915,31 @@ function(input, output, session) {
       )
     
     p
+  })
+  
+  output$table_Medicine <- DT::renderDT({
+    # Use raw filtered data to show ALL medicines in the table
+    req(filtered_data_1())
+    
+    # Calculate Full List
+    df <- filtered_data_1() %>%
+      group_by(Medicine) %>%
+      summarise(Total_Net = sum(Total_Net, na.rm = TRUE), .groups = "drop") %>%
+      arrange(desc(Total_Net))
+    
+    DT::datatable(
+      df,
+      rownames = FALSE,
+      extensions = 'Buttons',
+      options = list(
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel'),
+        pageLength = 10,
+        autoWidth = TRUE
+      ),
+      colnames = c("Medicine", "Total Net")
+    ) %>%
+      DT::formatCurrency("Total_Net", currency = "$", digits = 0)
   })
   
   # Heat Map - New Exports Timeline
@@ -1136,11 +1314,16 @@ function(input, output, session) {
     
     value_box(
       title = "Total Forecast",
-      value = tags$span(scales::dollar(total_forecast, accuracy = 1), style = "font-size: 1.2rem;"),
-      showcase = bsicons::bs_icon("graph-up-arrow"),
-      theme = "primary",
-      height = "150px",
-      p(HTML("&nbsp;"))
+      value = scales::dollar(total_forecast, accuracy = 0.001),
+      showcase = bsicons::bs_icon("graph-up-arrow", class = "text-primary"), # Blue Icon
+      theme = "white",  # Clean white background
+      class = "shadow-sm border-start border-5 border-primary", # Blue accent border on left
+      
+      # Explanation Section
+      div(class = "pt-2",
+          p(class = "text-muted small mb-0", 
+            "Risk-adjusted revenue projection based on weighted probabilities.")
+      )
     )
   })
   
@@ -1149,14 +1332,25 @@ function(input, output, session) {
     req(df, nrow(df) > 0)
     
     total_actual <- sum(df$Total_Net, na.rm = TRUE)
+    total_forecast <- sum(df$Weighted, na.rm = TRUE)
+    
+    # Calculate Variance/Achievement
+    pct_achieved <- if(total_forecast > 0) (total_actual / total_forecast) else 0
     
     value_box(
-      title = "Total Actual Sales",
-      value = tags$span(scales::dollar(total_actual, accuracy = 1), style = "font-size: 1.2rem;"),
-      showcase = bsicons::bs_icon("cash-stack"),
-      theme = "primary",
-      height = "150px",
-      p(HTML("&nbsp;"))
+      title = "Actual Revenue",
+      value = scales::dollar(total_actual, accuracy = 0.001),
+      showcase = bsicons::bs_icon("cash-stack", class = "text-success"), # Green Icon
+      theme = "white",
+      class = "shadow-sm border-start border-5 border-success", # Green accent border
+      
+      # Explanation with Achievement Metric
+      div(class = "pt-2",
+          p(class = "text-muted small mb-0", 
+            paste0("Realized net sales. Current achievement: ", 
+                   scales::percent(pct_achieved, accuracy = 0.1), 
+                   " of target."))
+      )
     )
   })
   
@@ -1173,12 +1367,19 @@ function(input, output, session) {
     req(nrow(top_c) > 0)
     
     value_box(
-      title = "Top Forecast Country",
-      value = tags$span(top_c$Country, style = "font-size: 1.2rem;"),
-      showcase = bsicons::bs_icon("globe-americas"),
-      p(class = "small", paste("Forecast:", scales::dollar(top_c$total_weighted, accuracy = 1))),
-      theme = "primary",
-      height = "150px"
+      title = "Top Market",
+      value = top_c$Country,
+      showcase = bsicons::bs_icon("globe-americas", class = "text-info"), # Cyan Icon
+      theme = "white",
+      class = "shadow-sm border-start border-5 border-info", # Cyan accent border
+      
+      # Explanation
+      div(class = "pt-2",
+          p(class = "text-muted small mb-0", 
+            paste("Single largest market contributor, projecting", 
+                  scales::dollar(top_c$total_weighted, accuracy = 0.001), 
+                  "in value."))
+      )
     )
   })
   
@@ -1195,12 +1396,19 @@ function(input, output, session) {
     req(nrow(top_m) > 0)
     
     value_box(
-      title = "Top Forecast Medicine",
-      value = tags$span(top_m$Medicine, style = "font-size: 1.2rem;"),
-      showcase = bsicons::bs_icon("capsule"),
-      p(class = "small", paste("Forecast:", scales::dollar(top_m$total_weighted, accuracy = 1))),
-      theme = "primary",
-      height = "150px"
+      title = "Key Product",
+      value = top_m$Medicine,
+      showcase = bsicons::bs_icon("capsule", class = "text-warning"), # Orange Icon
+      theme = "white",
+      class = "shadow-sm border-start border-5 border-warning", # Orange accent border
+      
+      # Explanation
+      div(class = "pt-2",
+          p(class = "text-muted small mb-0", 
+            paste("Leading SKU by volume, accounting for", 
+                  scales::dollar(top_m$total_weighted, accuracy = 0.001), 
+                  "of forecast."))
+      )
     )
   })
   
@@ -1733,14 +1941,12 @@ function(input, output, session) {
   
 
   # MA plots ============================================
-  
   data_plot_year_MA <- eventReactive(input$calcButton_MA, {
     req(filtered_data_MA())
-    # req(nrow(filtered_data_1()) > 0)
     
-    df <- filtered_data_MA() %>% mutate(Total_Net=if_else(is.na(Total_Net),0,Total_Net))
+    df <- filtered_data_MA() %>% 
+      mutate(Total_Net = if_else(is.na(Total_Net), 0, Total_Net))
     
-    # Validate required columns
     required_cols <- c("Gregorian_year", "Status", "Total_Net")
     req(all(required_cols %in% names(df)))
     
@@ -1749,16 +1955,16 @@ function(input, output, session) {
       summarise(Total_Net = sum(Total_Net, na.rm = TRUE), .groups = "drop") %>%
       mutate(Gregorian_year = factor(Gregorian_year))
   })
+  
   output$plot_year_MA <- renderPlotly({
     req(data_plot_year_MA())
-
+    
     data_to_plot <- data_plot_year_MA()
-
+    
     # Colors for Status
     num_status <- dplyr::n_distinct(data_to_plot$Status)
     status_palette <- generate_palette(num_status, c("#DB6400", "#272121"))
-
-    # ggplot with facet_wrap
+    
     p <- ggplot2::ggplot(
       data_to_plot,
       ggplot2::aes(
@@ -1773,7 +1979,6 @@ function(input, output, session) {
       )
     ) +
       ggplot2::geom_col(position = "stack") +
-      # ggplot2::facet_wrap(~ Manufacturer) +
       ggplot2::scale_fill_manual(values = status_palette, name = "MA Status") +
       ggplot2::labs(
         title = "Total Net by Year (Stacked by MA Status)",
@@ -1786,9 +1991,30 @@ function(input, output, session) {
         legend.position = "bottom",
         plot.title = ggplot2::element_text(hjust = 0.5)
       )
-
-    # Convert to plotly, use the ggplot 'text' aesthetic for tooltip
+    
     plotly::ggplotly(p, tooltip = "text")
+  })
+  
+  # --- 3. Table Output (NEW) ---
+  output$table_year_MA <- DT::renderDT({
+    req(data_plot_year_MA())
+    
+    # Get data
+    df <- data_plot_year_MA()
+    
+    # Create a clean DataTable
+    DT::datatable(
+      df,
+      rownames = FALSE,
+      extensions = 'Buttons', # Add download buttons (useful for regulatory data)
+      options = list(
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel'),
+        pageLength = 10
+      ),
+      colnames = c("Year", "Status", "Total Net")
+    ) %>%
+      DT::formatCurrency("Total_Net", currency = "$", digits = 0)
   })
   
   # MA tables ---------------------------------------------------------------
@@ -1912,32 +2138,6 @@ function(input, output, session) {
     req(filtered_data_MA())
     filtered_data_MA()
   })
-
-  output$total_net_MA_card <- renderUI({
-    df <- export_card_data()
-    req(df, nrow(df) > 0)
-    
-    total_net_With_MA <- sum(df$Total_Net[df$Status == "With MA Approval"], na.rm = TRUE)
-    total_net_Without_MA <- sum(df$Total_Net[df$Status == "Without MA Approval"], na.rm = TRUE)
-    grand_total <- total_net_With_MA + total_net_Without_MA
-    
-    value_box(
-      title = HTML("Total Net Exports<br><small><span style='color: #1f77b4;'>With MA:</span> ", 
-                   scales::dollar(total_net_With_MA, accuracy = 1),
-                   " | ",
-                   "<span style='color: #d62728;'>Without MA:</span> ", 
-                   scales::dollar(total_net_Without_MA, accuracy = 1), "</small>"),
-      value = tags$span(scales::dollar(grand_total, accuracy = 1), 
-                        style = "font-size: 1.4rem; font-weight: bold;"),
-      showcase = bsicons::bs_icon("cash-coin"),
-      theme = "primary",
-      height = "180px",
-      div(HTML(paste0(
-        "<small style='color: #666;'>Grand Total: ", 
-        scales::dollar(grand_total, accuracy = 1), "</small>"
-      )), style = "margin-top: 5px;")
-    )
-  })
   
   Ma_card_data <- eventReactive(input$calcButton_MA, {
     req(MA_1())
@@ -1957,6 +2157,107 @@ function(input, output, session) {
     return(Ma)
   })
   
+  output$total_net_MA_card <- renderUI({
+    df <- export_card_data()
+    req(df, nrow(df) > 0)
+    
+    # Data Prep
+    total_net_With_MA <- sum(df$Total_Net[df$Status == "With MA Approval"], na.rm = TRUE)
+    total_net_Without_MA <- sum(df$Total_Net[df$Status == "Without MA Approval"], na.rm = TRUE)
+    grand_total <- total_net_With_MA + total_net_Without_MA
+    
+    value_box(
+      title = "Net Exports by MA Status",
+      value = scales::dollar(grand_total, accuracy = 0.001, scale = 1e-6, suffix = "M"),
+      showcase = bsicons::bs_icon("bank2", class = "text-info"), # Cyan Icon
+      theme = "white",
+      # Cyan accent border to match the "Info/Data" theme
+      class = "shadow-sm border-start border-5 border-info", 
+      height = "180px",
+      
+      # Breakdown with colored icons for readability on white
+      div(class = "pt-2",
+          div(class = "d-flex align-items-center gap-2",
+              bsicons::bs_icon("check-circle-fill", class = "text-success"), # Green Check
+              span("With MA:", class = "text-muted"), 
+              strong(scales::dollar(total_net_With_MA, accuracy = 0.001, scale = 1e-6, suffix = "M"))
+          ),
+          div(class = "d-flex align-items-center gap-2",
+              bsicons::bs_icon("x-circle-fill", class = "text-danger"), # Red X
+              span("No MA:", class = "text-muted"), 
+              strong(scales::dollar(total_net_Without_MA, accuracy = 0.001, scale = 1e-6, suffix = "M"))
+          )
+      )
+    )
+  })
+  
+  output$Ma_card <- renderUI({
+    df <- Ma_card_data()
+    req(df, nrow(df) > 0)
+    
+    # Data Prep
+    MA_new <- nrow(df[df$Project_Status == "new",])
+    MA_re_registration <- nrow(df[df$Project_Status == "re-registration",])
+    MA_expired <- nrow(df[df$Expiration_status == "Expired",])
+    total_MA <- MA_new + MA_re_registration
+    
+    value_box(
+      title = "Active MA Approvals",
+      value = scales::number(total_MA, accuracy = 1),
+      showcase = bsicons::bs_icon("file-earmark-medical", class = "text-primary"), # Blue Icon
+      theme = "white",
+      # Blue accent border for "Regulatory/Official" theme
+      class = "shadow-sm border-start border-5 border-primary", 
+      height = "180px",
+      
+      # Breakdown
+      div(class = "pt-2 small",
+          div(
+            bsicons::bs_icon("plus-circle", class = "text-success"), # Green Plus
+            span("New:", class = "text-muted"), 
+            strong(scales::number(MA_new, accuracy = 1))
+          ),
+          div(
+            bsicons::bs_icon("arrow-repeat", class = "text-primary"), # Blue Repeat
+            span("Re-reg:", class = "text-muted"), 
+            strong(scales::number(MA_re_registration, accuracy = 1))
+          ),
+          div(
+            bsicons::bs_icon("exclamation-triangle", class = "text-warning"), # Orange Warning
+            span("Expired:", class = "text-muted"), 
+            strong(scales::number(MA_expired, accuracy = 1))
+          )
+      )
+    )
+  })
+  
+  
+  # output$total_net_MA_card <- renderUI({
+  #   df <- export_card_data()
+  #   req(df, nrow(df) > 0)
+  #   
+  #   total_net_With_MA <- sum(df$Total_Net[df$Status == "With MA Approval"], na.rm = TRUE)
+  #   total_net_Without_MA <- sum(df$Total_Net[df$Status == "Without MA Approval"], na.rm = TRUE)
+  #   grand_total <- total_net_With_MA + total_net_Without_MA
+  #   
+  #   value_box(
+  #     title = HTML("Total Net Exports<br><small><span style='color: #1f77b4;'>With MA:</span> ", 
+  #                  scales::dollar(total_net_With_MA, accuracy = 1),
+  #                  " | ",
+  #                  "<span style='color: #d62728;'>Without MA:</span> ", 
+  #                  scales::dollar(total_net_Without_MA, accuracy = 1), "</small>"),
+  #     value = tags$span(scales::dollar(grand_total, accuracy = 1), 
+  #                       style = "font-size: 1.4rem; font-weight: bold;"),
+  #     showcase = bsicons::bs_icon("cash-coin"),
+  #     theme = "primary",
+  #     height = "180px",
+  #     div(HTML(paste0(
+  #       "<small style='color: #666;'>Grand Total: ", 
+  #       scales::dollar(grand_total, accuracy = 1), "</small>"
+  #     )), style = "margin-top: 5px;")
+  #   )
+  # })
+  # 
   # output$Ma_card <- renderUI({
   #   df <- Ma_card_data()
   #   req(df, nrow(df) > 0)
@@ -1970,8 +2271,11 @@ function(input, output, session) {
   #     title = HTML("MA Approvals<br><small><span style='color: #1f77b4;'>New MA:</span> ", 
   #                  scales::number(MA_new, accuracy = 1),
   #                  " | ",
-  #                  "<span style='color: #d62728;'>Re-registered MA:</span> ", 
-  #                  scales::number(MA_re_registration, accuracy = 1), "</small>"),
+  #                  "<span style='color: #d62728;'>Re-registered:</span> ", 
+  #                  scales::number(MA_re_registration, accuracy = 1),
+  #                  " | ",
+  #                  "<span style='color: #ff7f0e;'>Expired:</span> ", 
+  #                  scales::number(MA_expired, accuracy = 1), "</small>"),
   #     value = tags$span(scales::number(total_MA, accuracy = 1), 
   #                       style = "font-size: 1.4rem; font-weight: bold;"),
   #     showcase = bsicons::bs_icon("cash-coin"),
@@ -1983,36 +2287,6 @@ function(input, output, session) {
   #     )), style = "margin-top: 5px;")
   #   )
   # })
-  
-  output$Ma_card <- renderUI({
-    df <- Ma_card_data()
-    req(df, nrow(df) > 0)
-    
-    MA_new <- nrow(df[df$Project_Status == "new",])
-    MA_re_registration <- nrow(df[df$Project_Status == "re-registration",])
-    MA_expired <- nrow(df[df$Expiration_status == "Expired",])
-    total_MA <- MA_new + MA_re_registration
-    
-    value_box(
-      title = HTML("MA Approvals<br><small><span style='color: #1f77b4;'>New MA:</span> ", 
-                   scales::number(MA_new, accuracy = 1),
-                   " | ",
-                   "<span style='color: #d62728;'>Re-registered:</span> ", 
-                   scales::number(MA_re_registration, accuracy = 1),
-                   " | ",
-                   "<span style='color: #ff7f0e;'>Expired:</span> ", 
-                   scales::number(MA_expired, accuracy = 1), "</small>"),
-      value = tags$span(scales::number(total_MA, accuracy = 1), 
-                        style = "font-size: 1.4rem; font-weight: bold;"),
-      showcase = bsicons::bs_icon("cash-coin"),
-      theme = "primary",
-      height = "180px",
-      div(HTML(paste0(
-        "<small style='color: #666;'>Grand Total: ", 
-        scales::number(total_MA, accuracy = 1), "</small>"
-      )), style = "margin-top: 5px;")
-    )
-  })
   
 
 }
