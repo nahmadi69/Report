@@ -597,6 +597,79 @@ ui <- page_fluid(
                   )
                 )
               )
+    ),
+    # Add this INSIDE navset_tab(), after the existing nav_panel("Forecast", ...)
+    
+    # --- PASTE THIS INTO ui.R (After the "Forecast" panel, before the final closing brackets) ---
+    
+    nav_panel("Forecast Comparison",
+              layout_sidebar(
+                sidebar = sidebar(
+                  width = 300,
+                  div(class = "file-upload-section",
+                      div(class = "section-title", "Comparison Setup"),
+                      fileInput("file_compare", "Upload Forecast File (.xlsx)", accept = c(".xlsx")),
+                      
+                      # Dynamic UI to select sheets after upload
+                      uiOutput("compare_sheet_ui_old"),
+                      uiOutput("compare_sheet_ui_new")
+                  ),
+                  
+                  card(
+                    style = "margin-top: 15px;",
+                    actionButton("btn_run_compare", "Compare Sheets", class = "btn-primary btn-block", icon = icon("balance-scale"))
+                  ),
+                  
+                  card(
+                    card_footer("Select two different sheets to see what changed.")
+                  )
+                ),
+                
+                # Main Dashboard Area
+                div(
+                  # Summary Cards
+                  layout_column_wrap(
+                    width = "200px", fill = FALSE,
+                    value_box_output("box_diff_value"),
+                    value_box_output("box_diff_qty"),
+                    value_box_output("box_new_records"),
+                    value_box_output("box_removed_records")
+                  ),
+                  
+                  accordion(
+                    open = "Impact Analysis",
+                    
+                    # Visualizations
+                    accordion_panel("Impact Analysis",
+                                    layout_column_wrap(
+                                      width = 1/2,
+                                      card(card_header("Net Value Change by Country"), plotlyOutput("plot_diff_country")),
+                                      card(card_header("Net Value Change by Medicine"), plotlyOutput("plot_diff_medicine"))
+                                    )
+                    ),
+                    
+                    # Detailed Tables
+                    accordion_panel("Modified Records (Updates)", 
+                                    p(class="text-muted", "Records found in both sheets where values (Probability, QTY, Price) have changed."),
+                                    reactableOutput("table_diff_modified"),
+                                    downloadButton("dl_diff_modified", "Download Modified", class = "btn-sm btn-light")
+                    ),
+                    
+                    accordion_panel("New Records (Added)",
+                                    p(class="text-muted", "Records found ONLY in the New Sheet."),
+                                    reactableOutput("table_diff_added"),
+                                    downloadButton("dl_diff_added", "Download Added", class = "btn-sm btn-light")
+                    ),
+                    
+                    accordion_panel("Removed Records (Deleted)", 
+                                    p(class="text-muted", "Records found ONLY in the Old Sheet."),
+                                    reactableOutput("table_diff_removed"),
+                                    downloadButton("dl_diff_removed", "Download Removed", class = "btn-sm btn-light")
+                    )
+                  )
+                )
+              )
     )
+    
   )
 )

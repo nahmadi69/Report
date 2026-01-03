@@ -2,6 +2,7 @@ function(input, output, session) {
   
   # Your sheet ID
   SHEET_ID <- "13EYwvmP5uWQP_movX4vITdj8KtP6RiRi0WhNfJiXjVA"
+  SHEET_ID_1 <- "1q95ePu8dSSw2jq_0EC8I3iKOLJUcesyMM476eheVUn8"
   gs4_deauth()
   
   # MA_base <- read_sheet(SHEET_ID)
@@ -38,7 +39,8 @@ function(input, output, session) {
     tryCatch({
      read_sheet(SHEET_ID)%>%
         mutate(Status = "With MA Approval") %>% 
-        select( "Gregorian_year"
+        select( "id"
+               ,"Gregorian_year"
                ,"Medicine"                   
                ,"Dosage"                     
                ,"Manufacturer"               
@@ -48,6 +50,25 @@ function(input, output, session) {
                ,"Expiration_status"
                ,"Project_Status"
                ,"Status"  )
+    }, error = function(e) {
+      showNotification(paste("Error loading MA file:", e$message), type = "error")
+      return(NULL)
+    })
+  })
+  MA_wide <- reactive({
+    tryCatch({
+      read_sheet(SHEET_ID_1)%>%
+        mutate(Status = "With MA Approval") %>% 
+        select( "id"
+                ,"Medicine"                   
+                ,"Dosage"                     
+                ,"Manufacturer"               
+                ,"Country"
+                ,"Registration_date_Gregorian"
+                ,"Expiry_date_Gregorian"
+                ,"Expiration_status"
+                ,"Project_Status"
+                ,"Status"  )
     }, error = function(e) {
       showNotification(paste("Error loading MA file:", e$message), type = "error")
       return(NULL)
@@ -423,29 +444,35 @@ function(input, output, session) {
 
   # Export Value Box Rendering ============================================
   
+  # Create a reactive dataset that updates ONLY when the button is clicked
+  net_export_data <- eventReactive(input$calcButton_1, {
+    req(filtered_data_1()) # Ensure base data exists
+    filtered_data_1()
+  })
   
   output$total_net_export_card <- renderUI({
     # Loading State
-    if (is.null(filtered_data_1())) {
+    if (is.null(net_export_data())) {
       return(value_box(
         title = "Total Net Exports", 
         value = "Waiting...", 
         showcase = bsicons::bs_icon("hourglass-split", animation = "spin", class = "text-muted"),
         theme = "white",
-        class = "shadow-sm border-start border-5 border-secondary", # Grey border for loading
+        class = "shadow-sm border-start border-5 border-secondary", 
         height = "150px"
       ))
     }
     
-    df <- filtered_data_1()
+    df <- net_export_data()
     total_net <- sum(df$Total_Net, na.rm = TRUE)
     
     value_box(
       title = "Total Net Exports",
-      value = tags$span(scales::dollar(total_net, accuracy = 0.001), style = "font-size: 1.5rem;"),
-      showcase = bsicons::bs_icon("wallet2", class = "text-primary"), # Blue Icon
+      # Updated: Millions with M suffix
+      value = tags$span(scales::dollar(total_net, accuracy = 0.01, scale = 1e-6, suffix = "M"), style = "font-size: 1.5rem;"),
+      showcase = bsicons::bs_icon("wallet2", class = "text-primary"), 
       theme = "white",
-      class = "shadow-sm border-start border-5 border-primary", # Blue accent border
+      class = "shadow-sm border-start border-5 border-primary", 
       height = "150px",
       
       # Explanation
@@ -458,15 +485,15 @@ function(input, output, session) {
   
   output$top_export_country_card <- renderUI({
     
-    df <- tryCatch(filtered_data_1(), error = function(e) NULL)
+    df <- tryCatch(net_export_data(), error = function(e) NULL)
     
-    if (is.null(filtered_data_1())) {
+    if (is.null(net_export_data())) {
       return(value_box(
         title = "Total Net Exports", 
         value = "Waiting...", 
         showcase = bsicons::bs_icon("hourglass-split", animation = "spin", class = "text-muted"),
         theme = "white",
-        class = "shadow-sm border-start border-5 border-secondary", # Grey border for loading
+        class = "shadow-sm border-start border-5 border-secondary", 
         height = "150px"
       ))
     }
@@ -486,30 +513,30 @@ function(input, output, session) {
     value_box(
       title = "Top Export Country",
       value = top_c$Country,
-      showcase = bsicons::bs_icon("geo-alt-fill", class = "text-info"), # Cyan Icon
+      showcase = bsicons::bs_icon("geo-alt-fill", class = "text-info"), 
       theme = "white",
-      class = "shadow-sm border-start border-5 border-info", # Cyan accent border
+      class = "shadow-sm border-start border-5 border-info", 
       height = "150px",
       
-      # Explanation
+      # Explanation: Millions with M suffix
       div(class = "pt-2",
           p(class = "text-muted small mb-0", 
             paste0("Highest revenue market generating ", 
-                   scales::dollar(top_c$total_net, accuracy = 0.001), "."))
+                   scales::dollar(top_c$total_net, accuracy = 0.01, scale = 1e-6, suffix = "M"), "."))
       )
     )
   })
   
   output$top_export_medicine_card <- renderUI({
-    df <- tryCatch(filtered_data_1(), error = function(e) NULL)
+    df <- tryCatch(net_export_data(), error = function(e) NULL)
     
-    if (is.null(filtered_data_1())) {
+    if (is.null(net_export_data())) {
       return(value_box(
         title = "Total Net Exports", 
         value = "Waiting...", 
         showcase = bsicons::bs_icon("hourglass-split", animation = "spin", class = "text-muted"),
         theme = "white",
-        class = "shadow-sm border-start border-5 border-secondary", # Grey border for loading
+        class = "shadow-sm border-start border-5 border-secondary", 
         height = "150px"
       ))
     }
@@ -527,16 +554,16 @@ function(input, output, session) {
     value_box(
       title = "Top Exported Medicine",
       value = top_m$Medicine,
-      showcase = bsicons::bs_icon("capsule-pill", class = "text-warning"), # Orange Icon
+      showcase = bsicons::bs_icon("capsule-pill", class = "text-warning"), 
       theme = "white",
-      class = "shadow-sm border-start border-5 border-warning", # Orange accent border
+      class = "shadow-sm border-start border-5 border-warning", 
       height = "150px",
       
-      # Explanation
+      # Explanation: Millions with M suffix
       div(class = "pt-2",
           p(class = "text-muted small mb-0", 
             paste0("Leading product contributing ", 
-                   scales::dollar(top_m$total_net, accuracy = 0.001), 
+                   scales::dollar(top_m$total_net, accuracy = 0.01, scale = 1e-6, suffix = "M"), 
                    " to sales."))
       )
     )
@@ -1314,10 +1341,11 @@ function(input, output, session) {
     
     value_box(
       title = "Total Forecast",
-      value = scales::dollar(total_forecast, accuracy = 0.001),
-      showcase = bsicons::bs_icon("graph-up-arrow", class = "text-primary"), # Blue Icon
-      theme = "white",  # Clean white background
-      class = "shadow-sm border-start border-5 border-primary", # Blue accent border on left
+      # Updated: Scale by 1e-6 (million) and add "M" suffix
+      value = scales::dollar(total_forecast, accuracy = 0.01, scale = 1e-6, suffix = "M"),
+      showcase = bsicons::bs_icon("graph-up-arrow", class = "text-primary"), 
+      theme = "white",
+      class = "shadow-sm border-start border-5 border-primary",
       
       # Explanation Section
       div(class = "pt-2",
@@ -1339,10 +1367,11 @@ function(input, output, session) {
     
     value_box(
       title = "Actual Revenue",
-      value = scales::dollar(total_actual, accuracy = 0.001),
-      showcase = bsicons::bs_icon("cash-stack", class = "text-success"), # Green Icon
+      # Main Value: Millions with M suffix
+      value = scales::dollar(total_actual, accuracy = 0.01, scale = 1e-6, suffix = "M"),
+      showcase = bsicons::bs_icon("cash-stack", class = "text-success"), 
       theme = "white",
-      class = "shadow-sm border-start border-5 border-success", # Green accent border
+      class = "shadow-sm border-start border-5 border-success", 
       
       # Explanation with Achievement Metric
       div(class = "pt-2",
@@ -1369,15 +1398,15 @@ function(input, output, session) {
     value_box(
       title = "Top Market",
       value = top_c$Country,
-      showcase = bsicons::bs_icon("globe-americas", class = "text-info"), # Cyan Icon
+      showcase = bsicons::bs_icon("globe-americas", class = "text-info"), 
       theme = "white",
-      class = "shadow-sm border-start border-5 border-info", # Cyan accent border
+      class = "shadow-sm border-start border-5 border-info", 
       
-      # Explanation
+      # Explanation: Millions with M suffix
       div(class = "pt-2",
           p(class = "text-muted small mb-0", 
             paste("Single largest market contributor, projecting", 
-                  scales::dollar(top_c$total_weighted, accuracy = 0.001), 
+                  scales::dollar(top_c$total_weighted, accuracy = 0.01, scale = 1e-6, suffix = "M"), 
                   "in value."))
       )
     )
@@ -1398,15 +1427,15 @@ function(input, output, session) {
     value_box(
       title = "Key Product",
       value = top_m$Medicine,
-      showcase = bsicons::bs_icon("capsule", class = "text-warning"), # Orange Icon
+      showcase = bsicons::bs_icon("capsule", class = "text-warning"), 
       theme = "white",
-      class = "shadow-sm border-start border-5 border-warning", # Orange accent border
+      class = "shadow-sm border-start border-5 border-warning", 
       
-      # Explanation
+      # Explanation: Millions with M suffix
       div(class = "pt-2",
           p(class = "text-muted small mb-0", 
             paste("Leading SKU by volume, accounting for", 
-                  scales::dollar(top_m$total_weighted, accuracy = 0.001), 
+                  scales::dollar(top_m$total_weighted, accuracy = 0.01, scale = 1e-6, suffix = "M"), 
                   "of forecast."))
       )
     )
@@ -1938,7 +1967,17 @@ function(input, output, session) {
     
     return(d_filtered)
   })
-  
+  MA_1_waide <- reactive({
+    req(MA_1(), MA_wide())
+    
+    g=sort(unique(MA_1()$id))
+    
+    d_filtered=MA_wide() %>% 
+      filter(id %in% g)
+    
+    return(d_filtered)
+  })
+
 
   # MA plots ============================================
   data_plot_year_MA <- eventReactive(input$calcButton_MA, {
@@ -2019,10 +2058,10 @@ function(input, output, session) {
   
   # MA tables ---------------------------------------------------------------
   output$data_MA_11 <- renderReactable({
-    req(Ma_card_data())
+    req(MA_1_waide())
     
     reactable(
-      Ma_card_data(),
+      MA_1_waide(),
       pagination = TRUE,
       defaultPageSize = 15,
       pageSizeOptions = c(10, 20, 50),
@@ -2043,11 +2082,11 @@ function(input, output, session) {
   
   output$downloadTable_MA <- downloadHandler(
     filename = function() {
-      req(data_MA_11())
+      req(MA_1_waide())
       paste("MA-", Sys.Date(), ".csv", sep = "")
     },
     content = function(file) {
-      df <- data_MA_11()
+      df <- MA_1_waide()
       # Convert list columns (and everything else) to character
       df_flat <- as.data.frame(lapply(df, function(col) {
         if (is.list(col)) {
@@ -2092,25 +2131,6 @@ function(input, output, session) {
       )
     )
   })
-  output$downloadTable_MA_percent <- downloadHandler(
-    filename = function() {
-      req(filtered_data_MA())
-      paste("table2-", Sys.Date(), ".csv", sep = "")
-    },
-    content = function(file) {
-      df <- filtered_data_MA()
-      # Convert list columns (and everything else) to character
-      df_flat <- as.data.frame(lapply(df, function(col) {
-        if (is.list(col)) {
-          vapply(col, function(x) paste(as.character(x), collapse = "; "), character(1))
-        } else {
-          col
-        }
-      }), stringsAsFactors = FALSE)
-      
-      write.csv(df_flat, file, row.names = FALSE)
-    }
-  )
   
   output$downloadTable_MA_percent <- downloadHandler(
     filename = function() {
@@ -2131,6 +2151,8 @@ function(input, output, session) {
       write.csv(df_flat, file, row.names = FALSE)
     }
   )
+  
+
   
   # MA Value Box Rendering ============================================
 
@@ -2139,24 +2161,7 @@ function(input, output, session) {
     filtered_data_MA()
   })
   
-  Ma_card_data <- eventReactive(input$calcButton_MA, {
-    req(MA_1())
-    Ma=MA_1()
-    Ma=Ma %>% select("Medicine"
-                     ,"Dosage"
-                     ,"Manufacturer"
-                     ,"Country"
-                     ,"Registration_date_Gregorian"
-                     ,"Expiry_date_Gregorian"
-                     ,"Expiration_status"
-                     ,"Project_Status") %>%
-      distinct(across(c(Medicine, Dosage, Manufacturer, Country,
-                        Registration_date_Gregorian, Expiry_date_Gregorian,Expiration_status,
-                        Project_Status)))
-    
-    return(Ma)
-  })
-  
+
   output$total_net_MA_card <- renderUI({
     df <- export_card_data()
     req(df, nrow(df) > 0)
@@ -2191,8 +2196,13 @@ function(input, output, session) {
     )
   })
   
+  export_card_data_1 <- eventReactive(input$calcButton_MA, {
+    req(MA_1_waide())
+    MA_1_waide()
+  })
+  
   output$Ma_card <- renderUI({
-    df <- Ma_card_data()
+    df <- export_card_data_1()
     req(df, nrow(df) > 0)
     
     # Data Prep
@@ -2289,4 +2299,256 @@ function(input, output, session) {
   # })
   
 
+  
+  # -------------------------------------------------------------------------
+  # FORECAST COMPARISON LOGIC (UPDATED FOR QTY, VALUE, PROBABILITY, WEIGHTED)
+  # -------------------------------------------------------------------------
+  
+  # 1. Read Sheet Names upon Upload
+  available_sheets <- reactive({
+    req(input$file_compare)
+    readxl::excel_sheets(input$file_compare$datapath)
+  })
+  
+  # 2. Render Sheet Selectors
+  output$compare_sheet_ui_old <- renderUI({
+    req(available_sheets())
+    selectInput("sheet_old", "Select BASE (Old) Sheet:", choices = available_sheets(), selected = head(available_sheets(), 1))
+  })
+  
+  output$compare_sheet_ui_new <- renderUI({
+    req(available_sheets())
+    # Try to select the second sheet by default if available
+    default_sel <- if(length(available_sheets()) > 1) available_sheets()[2] else available_sheets()[1]
+    selectInput("sheet_new", "Select TARGET (New) Sheet:", choices = available_sheets(), selected = default_sel)
+  })
+  
+  # 3. Main Comparison Calculation
+  comparison_results <- eventReactive(input$btn_run_compare, {
+    req(input$file_compare, input$sheet_old, input$sheet_new)
+    
+    tryCatch({
+      # Read Data
+      df_old_raw <- read_excel(input$file_compare$datapath, sheet = input$sheet_old)
+      df_new_raw <- read_excel(input$file_compare$datapath, sheet = input$sheet_new)
+      
+      # --- CLEANING & INDEXING ---
+      clean_numeric <- function(x) {
+        x_clean <- gsub("[^0-9.-]", "", as.character(x))
+        as.numeric(x_clean)
+      }
+      
+      # 1. FINAL KEYS
+      join_keys <- c("Gregorian_year", "Estim_Shipment", "Country", "Medicine", "Dosage", "Category")
+      
+      # Prepare DF OLD (Clean ALL 4 variables)
+      df_old <- df_old_raw %>%
+        mutate(
+          QTY = clean_numeric(QTY),
+          Value = clean_numeric(Value),          # Added
+          Weighted = clean_numeric(Weighted),
+          Probability = clean_numeric(Probability)
+        ) %>%
+        group_by(across(all_of(join_keys))) %>%
+        mutate(dup_id = row_number()) %>%
+        ungroup()
+      
+      # Prepare DF NEW (Clean ALL 4 variables)
+      df_new <- df_new_raw %>%
+        mutate(
+          QTY = clean_numeric(QTY),
+          Value = clean_numeric(Value),          # Added
+          Weighted = clean_numeric(Weighted),
+          Probability = clean_numeric(Probability)
+        ) %>%
+        group_by(across(all_of(join_keys))) %>%
+        mutate(dup_id = row_number()) %>%
+        ungroup()
+      
+      # 2. MATCH USING KEYS + DUP_ID
+      final_keys <- c(join_keys, "dup_id")
+      
+      # -----------------------------------------
+      
+      # Find ADDED Rows
+      added <- anti_join(df_new, df_old, by = final_keys) %>% select(-dup_id)
+      
+      # Find REMOVED Rows
+      removed <- anti_join(df_old, df_new, by = final_keys) %>% select(-dup_id)
+      
+      # Find MODIFIED Rows
+      common_rows <- inner_join(
+        df_old %>% select(all_of(final_keys), 
+                          W_Old = Weighted, Q_Old = QTY, P_Old = Probability, V_Old = Value),
+        df_new %>% select(all_of(final_keys), 
+                          W_New = Weighted, Q_New = QTY, P_New = Probability, V_New = Value),
+        by = final_keys
+      )
+      
+      modified <- common_rows %>%
+        mutate(
+          w_new = coalesce(W_New, 0), w_old = coalesce(W_Old, 0),
+          q_new = coalesce(Q_New, 0), q_old = coalesce(Q_Old, 0),
+          p_new = coalesce(P_New, 0), p_old = coalesce(P_Old, 0),
+          v_new = coalesce(V_New, 0), v_old = coalesce(V_Old, 0),
+          
+          # Calculate Differences
+          Diff_Weighted = w_new - w_old,
+          Diff_QTY = q_new - q_old,
+          Diff_Prob = p_new - p_old,
+          Diff_Value = v_new - v_old
+        ) %>%
+        # Filter to keep ONLY rows with real changes in any of the 4 vars
+        filter(abs(Diff_Weighted) > 1 | abs(Diff_QTY) > 0 | abs(Diff_Prob) > 0.001 | abs(Diff_Value) > 1) %>%
+        select(-w_new, -w_old, -q_new, -q_old, -p_new, -p_old, -v_new, -v_old, -dup_id)
+      
+      list(added = added, removed = removed, modified = modified)
+      
+    }, error = function(e) {
+      showNotification(paste("Error during comparison:", e$message), type = "error")
+      NULL
+    })
+  })
+  
+  # -------------------------------------------------------------------------
+  # OUTPUTS: Value Boxes
+  # -------------------------------------------------------------------------
+  
+  output$box_diff_value <- renderUI({
+    res <- comparison_results()
+    if(is.null(res)) return(NULL)
+    
+    net_change <- sum(res$modified$Diff_Weighted, na.rm=T) + 
+      sum(res$added$Weighted, na.rm=T) - 
+      sum(res$removed$Weighted, na.rm=T)
+    
+    color <- if(net_change >= 0) "success" else "danger"
+    icon_name <- if(net_change >= 0) "arrow-up-circle" else "arrow-down-circle"
+    
+    value_box(
+      title = "Net Weighted Impact",
+      value = scales::dollar(net_change),
+      showcase = bsicons::bs_icon(icon_name),
+      theme = color
+    )
+  })
+  
+  output$box_diff_qty <- renderUI({
+    res <- comparison_results()
+    if(is.null(res)) return(NULL)
+    
+    net_qty <- sum(res$modified$Diff_QTY, na.rm=T) + 
+      sum(res$added$QTY, na.rm=T) - 
+      sum(res$removed$QTY, na.rm=T)
+    
+    value_box(
+      title = "Net Quantity Change",
+      value = scales::comma(net_qty),
+      showcase = bsicons::bs_icon("box-seam"),
+      theme = "primary"
+    )
+  })
+  
+  output$box_new_records <- renderUI({
+    res <- comparison_results()
+    value_box(title = "New Records", value = nrow(res$added), theme = "info", showcase = bsicons::bs_icon("plus-square"))
+  })
+  
+  output$box_removed_records <- renderUI({
+    res <- comparison_results()
+    value_box(title = "Removed Records", value = nrow(res$removed), theme = "secondary", showcase = bsicons::bs_icon("dash-square"))
+  })
+  
+  # -------------------------------------------------------------------------
+  # OUTPUTS: Tables
+  # -------------------------------------------------------------------------
+  
+  # Reusable Style Function
+  style_change <- function(value) {
+    if (is.na(value)) return(list(color = "black"))
+    if (value > 0) list(color = "#28a745", fontWeight = "bold") # Green
+    else if (value < 0) list(color = "#dc3545", fontWeight = "bold") # Red
+    else list(color = "black")
+  }
+  
+  output$table_diff_modified <- renderReactable({
+    req(comparison_results())
+    df <- comparison_results()$modified
+    
+    reactable(df,
+              columns = list(
+                # 1. QTY
+                Diff_QTY = colDef(name = "QTY Change", format = colFormat(separators = TRUE, digits = 0), style = function(value) style_change(value)),
+                
+                # 2. Value (Gross)
+                Diff_Value = colDef(name = "Value Change", format = colFormat(currency = "USD", digits = 0), style = function(value) style_change(value)),
+                
+                # 3. Probability
+                Diff_Prob = colDef(name = "Prob Change", format = colFormat(percent = TRUE, digits = 1), style = function(value) style_change(value)),
+                
+                # 4. Weighted Value
+                Diff_Weighted = colDef(name = "Weighted Change", format = colFormat(currency = "USD", digits = 0), style = function(value) style_change(value)),
+                
+                # Context
+                P_Old = colDef(name = "Old Prob%", format = colFormat(percent = TRUE, digits = 0)),
+                P_New = colDef(name = "New Prob%", format = colFormat(percent = TRUE, digits = 0))
+              ),
+              filterable = TRUE, striped = TRUE, highlight = TRUE
+    )
+  })
+  
+  output$table_diff_added <- renderReactable({
+    req(comparison_results())
+    reactable(comparison_results()$added, filterable = TRUE, striped = TRUE)
+  })
+  
+  output$table_diff_removed <- renderReactable({
+    req(comparison_results())
+    reactable(comparison_results()$removed, filterable = TRUE, striped = TRUE)
+  })
+  
+  # -------------------------------------------------------------------------
+  # OUTPUTS: Plots
+  # -------------------------------------------------------------------------
+  
+  output$plot_diff_country <- renderPlotly({
+    req(comparison_results())
+    res <- comparison_results()
+    
+    # Aggregate changes by Country (Using Weighted Value)
+    mod_agg <- res$modified %>% group_by(Country) %>% summarise(Change = sum(Diff_Weighted, na.rm=T))
+    add_agg <- res$added %>% group_by(Country) %>% summarise(Change = sum(Weighted, na.rm=T))
+    rem_agg <- res$removed %>% group_by(Country) %>% summarise(Change = -sum(Weighted, na.rm=T))
+    
+    total_agg <- bind_rows(mod_agg, add_agg, rem_agg) %>%
+      group_by(Country) %>%
+      summarise(Total_Change = sum(Change, na.rm=T)) %>%
+      filter(Total_Change != 0) %>%
+      arrange(desc(Total_Change))
+    
+    plot_ly(total_agg, x = ~reorder(Country, Total_Change), y = ~Total_Change, type = 'bar',
+            marker = list(color = ~ifelse(Total_Change > 0, '#28a745', '#dc3545'))) %>%
+      layout(title = "Net Weighted Change by Country", xaxis = list(title = ""), yaxis = list(title = "Change in USD"))
+  })
+  
+  output$plot_diff_medicine <- renderPlotly({
+    req(comparison_results())
+    res <- comparison_results()
+    
+    # Similar aggregation for Medicine
+    mod_agg <- res$modified %>% group_by(Medicine) %>% summarise(Change = sum(Diff_Weighted, na.rm=T))
+    add_agg <- res$added %>% group_by(Medicine) %>% summarise(Change = sum(Weighted, na.rm=T))
+    rem_agg <- res$removed %>% group_by(Medicine) %>% summarise(Change = -sum(Weighted, na.rm=T))
+    
+    total_agg <- bind_rows(mod_agg, add_agg, rem_agg) %>%
+      group_by(Medicine) %>%
+      summarise(Total_Change = sum(Change, na.rm=T)) %>%
+      filter(Total_Change != 0) %>%
+      arrange(desc(Total_Change))
+    
+    plot_ly(total_agg, x = ~reorder(Medicine, Total_Change), y = ~Total_Change, type = 'bar',
+            marker = list(color = ~ifelse(Total_Change > 0, '#17a2b8', '#fd7e14'))) %>%
+      layout(title = "Net Weighted Change by Medicine", xaxis = list(title = ""), yaxis = list(title = "Change in USD"))
+  })
+  
 }
